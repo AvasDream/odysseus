@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>In-Memory State Management &amp; Invariants — Odysseus Audit</title>
+<style>
+:root{--bg:#0f1117;--panel:#171a21;--panel2:#1d212b;--border:#2a2f3a;--text:#e6e8ee;--muted:#9aa3b2;--accent:#5b9dff;--crit:#ff4d5e;--high:#ff8a3d;--med:#ffcf4d;--low:#6ea8ff;--ok:#36d399}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 24px 90px}
+header.rep{border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:26px}
+h1{font-size:27px;margin:0 0 6px;font-weight:750;letter-spacing:-.3px}
+h2{font-size:19px;margin:38px 0 14px;border-left:3px solid var(--accent);padding-left:11px}
+h3{font-size:16px;margin:0 0 10px}
+.sub{color:var(--muted);font-size:14px;margin:0}
+.rollup{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:92px}
+.stat .n{font-size:25px;font-weight:750;line-height:1}
+.stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:5px}
+.badge{display:inline-block;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:999px;color:#0b0d12}
+.badge.crit{background:var(--crit)}.badge.high{background:var(--high)}.badge.med{background:var(--med)}.badge.low{background:var(--low)}.badge.ok{background:var(--ok)}
+.l-crit{color:var(--crit)}.l-high{color:var(--high)}.l-med{color:var(--med)}.l-low{color:var(--low)}.l-ok{color:var(--ok)}
+.card{background:var(--panel);border:1px solid var(--border);border-left-width:4px;border-radius:10px;padding:18px 20px;margin:14px 0}
+.card.crit{border-left-color:var(--crit)}.card.high{border-left-color:var(--high)}.card.med{border-left-color:var(--med)}.card.low{border-left-color:var(--low)}
+.card h3{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:12px 0;font-size:14px}
+.meta .k{color:var(--muted);white-space:nowrap}
+.loc{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--accent)}
+pre{background:#0b0d12;border:1px solid var(--border);border-radius:8px;padding:14px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;color:#cdd3df;white-space:pre-wrap;word-break:break-word}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+tr:hover td{background:var(--panel2)}
+.pattern{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin:12px 0}
+.tag{display:inline-block;font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:2px 7px;border-radius:6px}
+.verdict{font-size:11px;padding:2px 7px;border-radius:6px;border:1px solid var(--border)}
+.verdict.real{color:var(--ok);border-color:var(--ok)}.verdict.uncertain{color:var(--med);border-color:var(--med)}
+.muted{color:var(--muted)}.small{font-size:13px}
+footer{margin-top:54px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="rep">
+<h1>In-Memory State Management &amp; Invariants</h1>
+<p class="sub">Conversation/message-list integrity, derived-state synchronization, shared-reference aliasing, illegal state transitions, and singleton/global mutation safety. <a href="../index.html">&larr; back to dashboard</a></p>
+<div class="rollup">
+<div class="stat"><div class="n l-crit">0</div><div class="l">Critical</div></div>
+<div class="stat"><div class="n l-high">1</div><div class="l">High</div></div>
+<div class="stat"><div class="n l-med">0</div><div class="l">Medium</div></div>
+<div class="stat"><div class="n l-low">0</div><div class="l">Low</div></div>
+<div class="stat"><div class="n l-ok">0</div><div class="l">Dropped FP</div></div>
+</div>
+</header>
+
+<h2>Findings</h2>
+
+<div class="card high">
+<h3><span>Compaction persists corrupted history: preface system-message count is applied as an offset into session.history (which has no preface), dropping and misordering real conversation turns</span><span><span class="badge high">High</span> <span class="verdict real">real</span></span></h3>
+<div class="meta">
+<div class="k">Severity</div><div>High — silent, permanent loss of conversation messages plus role/ordering corruption on every auto-compaction (data-integrity, not security).</div>
+<div class="k">Confidence</div><div>Confirmed by trace. Preconditions: any session owner (admin or non-admin) in normal chat or agent mode (both route through <span class="loc">build_chat_context -&gt; maybe_compact</span> at chat_helpers.py:716); estimated tokens cross <code>COMPACT_THRESHOLD = 0.85</code> of the model context window with &gt;=4 conversation messages and the summarization LLM call succeeds. No untrusted input or special privilege required; reproduces deterministically on the first auto-compaction.</div>
+<div class="k">Location</div><div><span class="loc">src/context_compactor.py:336-342,402,409,420-456; routes/chat_helpers.py:693,716; src/prompt_security.py:60-82,201-204</span></div>
+<div class="k">Invariant violated</div><div><code>session.history</code> must contain exactly the persisted conversation; after compaction the persisted history must equal (leading-system-messages-of-history) + summary + (recent conversation), with NO conversation message both un-summarized and un-kept. The code treats <code>system_msg_count</code> (a count of system messages in the per-turn <code>preface + history</code> payload) as the number of LEADING system messages in <code>session.history</code> — but preface system messages (UNTRUSTED_CONTEXT_POLICY and the optional preset system prompt) are built per-turn and NEVER stored in history, so the count overcounts by &gt;=1 always.</div>
+<div class="k">Why it matters</div><div>On every auto-compaction the persisted (and reloaded-next-turn) history is corrupted: the first <code>system_msg_count</code> REAL user/assistant turns are mislabeled as a system prefix and kept verbatim at the top; <code>recent_history = session.history[system_msg_count + split_point:]</code> is shifted forward so that many recent messages are silently DROPPED (neither summarized nor kept); and role ordering breaks. The in-memory result used for THIS turn is correct (returned <code>compacted</code>), so damage is invisible until the next turn reloads the mangled history via <code>replace_messages -&gt; get_context_messages</code>. Loss is permanent and can produce orphaned tool/tool_calls pairings on reload.</div>
+<div class="k">Trigger</div><div>Any session owner chatting until estimated tokens cross COMPACT_THRESHOLD (85%) with &gt;=4 convo messages. Fires for both chat and agent modes. UNTRUSTED_CONTEXT_POLICY is appended to preface unconditionally (build_context_preface lines 201-204), so <code>system_msg_count</code> &gt;=1 on every compaction — at least one recent message dropped every time; 2-3 with a preset prompt or research-spinoff primer.</div>
+<div class="k">Fix direction</div><div>Do not derive the history offset from the count of system messages in the per-turn payload. In <code>_update_session_history</code>, compute the leading-system run of <code>session.history</code> itself (count ChatMessages with <code>role=='system'</code> from index 0 until the first non-system) and use that as both the <code>system_prefix</code> length and the base for <code>effective_split</code>; or pass that history-local count from <code>maybe_compact</code> instead of <code>len(system_msgs)</code>.</div>
+<div class="k">Root cause</div><div><span class="tag">state-invariant</span></div>
+</div>
+<pre>routes/chat_helpers.py:693  messages = preface + sess.get_context_messages()
+                            (preface = per-turn system/user context, NOT persisted to history)
+chat_processor.py:201-204   appends {role:system, UNTRUSTED_CONTEXT_POLICY} to preface every turn
+context_compactor.py:336-342  for msg in messages: if role=='system': system_msgs.append(msg)
+                              -&gt; counts preface system msgs too (&gt;=1)
+context_compactor.py:409    _update_session_history(session, split_point, summary,
+                                                    system_msg_count=len(system_msgs))
+context_compactor.py:434-447
+    effective_split = system_msg_count + split_point
+    system_prefix   = list(session.history[:system_msg_count])
+    recent_history  = session.history[effective_split:]
+    new_history     = system_prefix + [summary_msg] + recent_history
+    -&gt; session.history has NO leading preface system messages, so system_msg_count&gt;=1
+       slices real user/assistant turns into system_prefix and shifts recent_history
+       forward, dropping session.history[split_point : split_point + system_msg_count].
+
+Concrete trace:
+  history = [U1,A1,U2,A2,U3,A3,U4], preface = [SYS_policy]
+  system_msgs = 1, convo_msgs = 7, split_point = 3
+  compacted (sent THIS turn) = [SYS, summary, A2,U3,A3,U4]   &lt;- correct
+  _update_session_history(split_point=3, system_msg_count=1):
+    effective_split = 4
+    system_prefix   = history[:1] = [U1]   (USER turn mislabeled as system prefix,
+                                            kept verbatim at top AND already summarized)
+    recent_history  = history[4:] = [U3,A3,U4]
+    -&gt; A2 (index 3) is silently DROPPED (in recent so not summarized; below slice so not kept)
+    new_history     = [U1, summary, U3, A3, U4]
+  Exactly system_msg_count (&gt;=1; 2 with a preset prompt) recent messages lost per compaction,
+  plus a role/ordering break.
+
+Persistence: _update_session_history -&gt; manager.replace_messages
+  (core/session_manager.py:309-349) DELETEs all DB messages for the session and re-inserts
+  the corrupted history, overwriting in-memory session.history. Loss is permanent and reused
+  on the next turn; invisible on the triggering turn.</pre>
+</div>
+
+<h2>Coverage</h2>
+
+<h3>Sub-areas inspected clean</h3>
+<table>
+<tr><th>Area</th><th>Finding</th></tr>
+<tr><td><span class="loc">core/session_manager.py</span></td><td>add_message / _persist_message / truncate_messages / replace_messages: message_count derivation and in-memory/DB sync are consistent; replace_messages reorders deterministically via microsecond-offset timestamps; deleted-session callback fails closed (drops cached session).</td></tr>
+<tr><td><span class="loc">core/models.Session</span></td><td>Per-instance history list created in __post_init__ (no shared dataclass default); _history is a property aliasing history (no divergence). get_context_messages() builds fresh dicts via to_dict; list-level aliasing avoided in build_chat_context via <code>preface + ...</code>.</td></tr>
+<tr><td><span class="loc">src/agent_loop.py</span></td><td>System-prompt insertion (1422), merge of consecutive system messages (1424-1436), and _append_round_history paths operate on the freshly-built <code>messages</code> list and fresh dicts, not on session.history ChatMessage objects; reasoning_content stripping mutates only loop-local dicts.</td></tr>
+<tr><td><span class="loc">src/model_context.py</span></td><td>_context_cache keyed on (endpoint_url, model); local endpoints bypass cache and re-query; known-flag bound to the value it proves in budget_context_for_model — no stale-flag/value pairing.</td></tr>
+<tr><td><span class="loc">src/settings.py</span></td><td>load_settings TTL cache: admin_tools callers mutate the returned dict then immediately save_settings (invalidating cache), so brief in-place mutation does not outlive the save; structured-default reset aliases DEFAULT_SETTINGS[key] but is JSON-serialized on save (no lasting shared-reference mutation).</td></tr>
+</table>
+
+<h3>Coverage gaps</h3>
+<ul>
+<li>Did not exhaustively trace every stream-cancellation / client-disconnect path in <span class="loc">agent_loop.py</span> (3484 lines) for partial-history persistence when a turn aborts mid-round; the assistant message is added at end-of-turn in chat_routes, but interrupted-turn add_message calls (lines 1242/1388 'stopped' paths) were not fully reconciled against the compaction state.</li>
+<li>Group-chat / compare-mode concurrent turns on the same session_id (multiple stream_agent_loop generators sharing one cached Session in self.sessions) were not stepped through for interleaved history appends; asyncio single-thread limits but await points between read of session.history and replace_messages could interleave across two in-flight requests for the same session.</li>
+</ul>
+
+<h3>Assumptions made</h3>
+<ul>
+<li>build_chat_context (chat_helpers.py:693) is the canonical message-assembly path for both /chat and /chat_stream and the only feeder of maybe_compact in production chat (verified call sites at chat_routes.py:396,663).</li>
+<li>Preface system messages (preset prompt, UNTRUSTED_CONTEXT_POLICY) are never persisted into session.history — confirmed by add_user_message/add_assistant_message only writing role user/assistant, and preface being rebuilt each turn and discarded.</li>
+<li>estimate_tokens-based COMPACT_THRESHOLD gate is reachable in normal use (long conversations on default ~128K or smaller local context windows).</li>
+</ul>
+
+<h3>N/A scope areas</h3>
+<ul>
+<li>Multi-host/multi-process shared-memory concerns: Odysseus is single-host single-process (asyncio), so module globals are not cross-process shared.</li>
+<li>"Admin can perform powerful action" state changes (settings writes via admin_tools, shell, MCP) are by-design per THREAT_MODEL.md and excluded.</li>
+</ul>
+
+<div class="pattern">
+<strong>Candidates dropped as false positives:</strong> 0. The single candidate in this area was confirmed real by independent trace and retained at High severity.
+</div>
+
+<footer>
+Methodology: each candidate finding was re-traced against source and assigned an independent skeptic verdict; only findings verified "real" or "uncertain" are reported, with severities corrected where the verifier overrode the original. Generated by an automated multi-agent deep-correctness &amp; security audit of Odysseus.
+</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Odysseus — Deep Correctness &amp; Security Audit</title>
+<style>
+:root{--bg:#0f1117;--panel:#171a21;--panel2:#1d212b;--border:#2a2f3a;--text:#e6e8ee;--muted:#9aa3b2;--accent:#5b9dff;--crit:#ff4d5e;--high:#ff8a3d;--med:#ffcf4d;--low:#6ea8ff;--ok:#36d399}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 24px 90px}
+header.rep{border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:26px}
+h1{font-size:27px;margin:0 0 6px;font-weight:750;letter-spacing:-.3px}
+h2{font-size:19px;margin:38px 0 14px;border-left:3px solid var(--accent);padding-left:11px}
+h3{font-size:16px;margin:0 0 10px}
+.sub{color:var(--muted);font-size:14px;margin:0}
+.rollup{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:92px}
+.stat .n{font-size:25px;font-weight:750;line-height:1}
+.stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:5px}
+.badge{display:inline-block;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:999px;color:#0b0d12}
+.badge.crit{background:var(--crit)}.badge.high{background:var(--high)}.badge.med{background:var(--med)}.badge.low{background:var(--low)}.badge.ok{background:var(--ok)}
+.l-crit{color:var(--crit)}.l-high{color:var(--high)}.l-med{color:var(--med)}.l-low{color:var(--low)}.l-ok{color:var(--ok)}
+.card{background:var(--panel);border:1px solid var(--border);border-left-width:4px;border-radius:10px;padding:18px 20px;margin:14px 0}
+.card.crit{border-left-color:var(--crit)}.card.high{border-left-color:var(--high)}.card.med{border-left-color:var(--med)}.card.low{border-left-color:var(--low)}
+.card h3{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:12px 0;font-size:14px}
+.meta .k{color:var(--muted);white-space:nowrap}
+.loc{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--accent)}
+pre{background:#0b0d12;border:1px solid var(--border);border-radius:8px;padding:14px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;color:#cdd3df;white-space:pre-wrap;word-break:break-word}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+tr:hover td{background:var(--panel2)}
+.pattern{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin:12px 0}
+.tag{display:inline-block;font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:2px 7px;border-radius:6px}
+.verdict{font-size:11px;padding:2px 7px;border-radius:6px;border:1px solid var(--border)}
+.verdict.real{color:var(--ok);border-color:var(--ok)}.verdict.uncertain{color:var(--med);border-color:var(--med)}
+.muted{color:var(--muted)}.small{font-size:13px}
+footer{margin-top:54px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="rep">
+<h1>Odysseus — Deep Correctness &amp; Security Audit</h1>
+<p class="sub">Synthesis across 12 area reports · no Critical findings · 2 High, 7 Medium, 3 Low (12 total) · 2 candidate findings dropped as false positives during independent verification.</p>
+<div class="rollup">
+<div class="stat"><div class="n l-crit">0</div><div class="l">Critical</div></div>
+<div class="stat"><div class="n l-high">2</div><div class="l">High</div></div>
+<div class="stat"><div class="n l-med">7</div><div class="l">Medium</div></div>
+<div class="stat"><div class="n l-low">3</div><div class="l">Low</div></div>
+<div class="stat"><div class="n">12</div><div class="l">Total</div></div>
+<div class="stat"><div class="n muted">2</div><div class="l">False pos. dropped</div></div>
+</div>
+</header>
+
+<h2>Methodology</h2>
+<p>This audit ran as a four-stage multi-agent pipeline:</p>
+<ol>
+<li><strong>Parallel per-area finders.</strong> Twelve area-scoped agents independently traced control and data flow across their assigned subsystems (authz, injection/SSRF, prompt-injection, concurrency, in-memory state, persistence, networking/streaming, caching/RAG, numeric/temporal, tools/MCP, email, secrets/lifecycle).</li>
+<li><strong>Independent adversarial verification.</strong> Every candidate finding was re-examined by a separate adversarial pass that tried to falsify it — find the missing guard, the upstream check, the accepted-tradeoff framing. Candidates that did not survive were dropped as false positives (<strong>2 dropped</strong>: 1 caching, 1 email).</li>
+<li><strong>Per-area reports.</strong> Survivors were written up as self-contained per-area reports (Markdown + HTML) with confidence, location, invariant violated, trigger, fix direction, and root-cause tag.</li>
+<li><strong>Synthesis (this dashboard).</strong> Results aggregated here: severity rollup, global ranking, systemic patterns clustered by root cause across areas, and a coverage map.</li>
+</ol>
+<p class="small muted">Note: the <span class="loc">/visual-explainer</span> skill was unavailable in this environment, so equivalent self-contained HTML reports were produced by hand with a single shared stylesheet. All analysis is static control/data-flow tracing — the application was not dynamically executed.</p>
+
+<h2>Global ranking — most serious issues</h2>
+<p class="small muted">Sorted Critical → High → Medium → Low. Title links to the area report.</p>
+<table>
+<thead><tr><th>Severity</th><th>Title</th><th>Location</th><th>Area</th><th>One-line</th></tr></thead>
+<tbody>
+<tr>
+<td><span class="badge high">High</span></td>
+<td><a href="areas/prompt-injection.html">Compaction summarizes untrusted content and re-injects it as a trusted system message</a></td>
+<td><span class="loc">src/context_compactor.py:336-417</span></td>
+<td>prompt-injection</td>
+<td>Summarizer strips the untrusted wrapper, then emits the output as a bare <span class="loc">role=&#39;system&#39;</span> message — laundering injected text into the trusted system role.</td>
+</tr>
+<tr>
+<td><span class="badge high">High</span></td>
+<td><a href="areas/state.html">Compaction persists corrupted history (system-msg count used as offset into session.history)</a></td>
+<td><span class="loc">src/context_compactor.py:336-456</span></td>
+<td>state</td>
+<td>Preface system-message count applied as a leading-system offset into a preface-less history, silently dropping &ge;1 recent turn and mislabeling a user turn as system on every compaction.</td>
+</tr>
+<tr>
+<td><span class="badge med">Medium</span></td>
+<td><a href="areas/prompt-injection.html">Research &#39;Discuss&#39; spin-off seeds web-derived report into a system-role primer</a></td>
+<td><span class="loc">routes/research_routes.py:654-669</span></td>
+<td>prompt-injection</td>
+<td>Web-derived report embedded verbatim into a never-trimmed <span class="loc">role=&#39;system&#39;</span> message, so surviving injections become authoritative system instructions.</td>
+</tr>
+<tr>
+<td><span class="badge med">Medium</span></td>
+<td><a href="areas/prompt-injection.html">Auto-poller executes calendar create/update/cancel from untrusted email body</a></td>
+<td><span class="loc">routes/email_pollers.py:513-611</span></td>
+<td>prompt-injection</td>
+<td>Inbound email body drives the calendar-extraction LLM with no untrusted wrapper, and parsed delete/update ops are auto-applied with no confirmation.</td>
+</tr>
+<tr>
+<td><span class="badge med">Medium</span></td>
+<td><a href="areas/concurrency.html">CancelledError in <span class="loc">_cached()</span> owner poisons shared singleflight cache key</a></td>
+<td><span class="loc">src/task_scheduler.py:60-94</span></td>
+<td>concurrency</td>
+<td>Owner cleanup lives only in <span class="loc">except Exception</span>, missing CancelledError; a Stop mid-fetch hangs all waiters of a process-global cross-user cache key forever.</td>
+</tr>
+<tr>
+<td><span class="badge med">Medium</span></td>
+<td><a href="areas/persistence.html">Memory audit silently drops memories added during its LLM window</a></td>
+<td><span class="loc">services/memory/memory_extractor.py:508-639</span></td>
+<td>persistence</td>
+<td>Snapshot → 30-120s LLM call → write-back from the stale snapshot clobbers same-owner rows added during the unlocked read-modify-write window.</td>
+</tr>
+<tr>
+<td><span class="badge med">Medium</span></td>
+<td><a href="areas/persistence.html">Manual compaction reorders the conversation on reload</a></td>
+<td><span class="loc">routes/history_routes.py:584-642</span></td>
+<td>persistence</td>
+<td>Summary rows get <span class="loc">timestamp=now</span> while kept rows retain earlier timestamps, so a timestamp-ordered DB reload sinks summaries to the end.</td>
+</tr>
+<tr>
+<td><span class="badge med">Medium</span></td>
+<td><a href="areas/email.html">Scheduled email delivered before the row is claimed/marked sent</a></td>
+<td><span class="loc">routes/email_pollers.py:1010-1085</span></td>
+<td>email</td>
+<td><span class="loc">status=&#39;sent&#39;</span> flips only after the irreversible SMTP send, so a crash or dual poller re-selects the pending row and re-delivers to all recipients.</td>
+</tr>
+<tr>
+<td><span class="badge med">Medium</span></td>
+<td><a href="areas/secrets-lifecycle.html">HuggingFace token written in plaintext into world-readable /tmp wrapper scripts</a></td>
+<td><span class="loc">routes/cookbook_routes.py:523,550,801-802</span></td>
+<td>secrets-lifecycle</td>
+<td><span class="loc">export HF_TOKEN</span> written into a <span class="loc">0o755</span> wrapper in shared <span class="loc">/tmp/odysseus-tmux</span>; any local OS user can read the admin&#39;s gated-repo token, and the serve path never self-deletes it.</td>
+</tr>
+<tr>
+<td><span class="badge low">Low</span></td>
+<td><a href="areas/concurrency.html">Orphaned tool-execution subprocess task on agent-turn cancellation</a></td>
+<td><span class="loc">src/agent_loop.py:3104-3133</span></td>
+<td>concurrency</td>
+<td>Awaiting <span class="loc">_tool_task</span> doesn&#39;t cancel it; on Stop/disconnect the bash/python subprocess runs unconsumed until the 3600s timeout.</td>
+</tr>
+<tr>
+<td><span class="badge low">Low</span></td>
+<td><a href="areas/concurrency.html">Cancelled background HTTP MCP connect leaks its AsyncExitStack</a></td>
+<td><span class="loc">src/mcp_manager.py:325-378</span></td>
+<td>concurrency</td>
+<td>A CancelledError before the stack is stored leaves the entered httpx transport + anyio task group never <span class="loc">aclose()</span>&#39;d (admin-only, finite).</td>
+</tr>
+<tr>
+<td><span class="badge low">Low</span></td>
+<td><a href="areas/numeric-temporal.html">Check-in calendar window strips timezone instead of converting to UTC</a></td>
+<td><span class="loc">src/task_scheduler.py:1205-1227</span></td>
+<td>numeric-temporal</td>
+<td>tz-aware LOCAL bounds <span class="loc">.replace(tzinfo=None)</span>&#39;d to naive-LOCAL instead of naive-UTC, shifting digest buckets by the owner&#39;s UTC offset for non-UTC owners.</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Systemic patterns</h2>
+<p class="small muted">The repeated root causes below matter more than any single instance — a pattern that recurs across surfaces is a design gap, not a bug.</p>
+
+<div class="pattern">
+<h3>1. Untrusted content reaches the LLM unwrapped — and worse, re-promoted to the system role <span class="tag">prompt-injection</span> <span class="tag">confused-deputy</span></h3>
+<p><strong>Root cause:</strong> <span class="loc">prompt_security.untrusted_context_message</span> is the project&#39;s trust boundary for external text, but several flows strip the wrapper or never apply it, and two flows then <em>re-emit</em> the result as a <span class="loc">role=&#39;system&#39;</span> message that downstream turns treat as authoritative.</p>
+<p><strong>Recurs in:</strong> prompt-injection — compaction laundering (<span class="loc">src/context_compactor.py:336-417</span>), research &#39;Discuss&#39; primer (<span class="loc">routes/research_routes.py:654-669</span>, <span class="loc">src/deep_research.py:609-700</span>), email→calendar auto-poller (<span class="loc">routes/email_pollers.py:513-611</span>); state — the same compaction path also corrupts structure (<span class="loc">src/context_compactor.py:336-456</span>); gaps: MCP native <span class="loc">role=&#39;tool&#39;</span> results (<span class="loc">agent_loop.py:1677-1683</span>), deep-research synthesis prompts.</p>
+<p><strong>Systemic fix:</strong> treat the untrusted wrapper as an invariant that survives every transform. Summaries/syntheses of untrusted content stay untrusted (wrapped, never bare <span class="loc">role=&#39;system&#39;</span>); re-wrap tool and web results at every re-injection point; gate auto-applied side-effects (calendar delete/update) on trust level, requiring confirmation for untrusted-derived ops.</p>
+</div>
+
+<div class="pattern">
+<h3>2. Compaction mutates history without preserving its structural invariants <span class="tag">state-invariant</span> <span class="tag">temporal</span></h3>
+<p><strong>Root cause:</strong> both auto and manual compaction rebuild history but break a structural invariant — either the leading-system <em>offset</em> (count from a preface+history payload applied to a preface-less history) or <em>temporal ordering</em> (summary timestamped <span class="loc">now</span>, sinking past kept turns on reload).</p>
+<p><strong>Recurs in:</strong> state — offset miscount drops/misorders turns (<span class="loc">src/context_compactor.py:336-456</span>); persistence — manual compaction reorders on reload (<span class="loc">routes/history_routes.py:584-642</span>); prompt-injection — the auto-compaction summarizer is the trust-laundering vector (same file).</p>
+<p><strong>Systemic fix:</strong> compaction should operate on explicit, validated message identities, not positional offsets and wall-clock timestamps; assert post-conditions (no turn dropped, ordering preserved, roles unchanged) before persisting via <span class="loc">replace_messages</span>. One correct compaction primitive fixes the offset bug, the reorder bug, and removes the laundering surface.</p>
+</div>
+
+<div class="pattern">
+<h3>3. Read-modify-write across an <span class="loc">await</span> with no claim/lock → lost updates &amp; double-completion <span class="tag">race</span> <span class="tag">double-completion</span> <span class="tag">lost-wakeup</span></h3>
+<p><strong>Root cause:</strong> a row/file is read (or selected) before a long async gap (LLM call, SMTP send), then written/acted on as if nothing changed — no atomic claim, optimistic version, or lock spanning the await.</p>
+<p><strong>Recurs in:</strong> persistence — memory audit writes back a stale snapshot after a 30-120s LLM call, clobbering same-owner rows (<span class="loc">services/memory/memory_extractor.py:508-639</span>); email — scheduled send delivers before flipping <span class="loc">status=&#39;sent&#39;</span>, so a crash or second poller re-sends (<span class="loc">routes/email_pollers.py:1010-1085</span>); concurrency — singleflight owner never settles its Future on CancelledError, poisoning a shared key (<span class="loc">src/task_scheduler.py:60-94</span>).</p>
+<p><strong>Systemic fix:</strong> claim-before-act. Acquire an atomic conditional UPDATE (<span class="loc">...WHERE status=&#39;pending&#39;</span>) or per-key lock before the irreversible/long operation, and always settle shared resolutions in <span class="loc">finally</span> (covering CancelledError), not just <span class="loc">except Exception</span>.</p>
+</div>
+
+<div class="pattern">
+<h3>4. Cancellation cleanup written as <span class="loc">except Exception</span>, missing <span class="loc">CancelledError</span> <span class="tag">resource-leak</span> <span class="tag">lost-wakeup</span></h3>
+<p><strong>Root cause:</strong> <span class="loc">asyncio.CancelledError</span> is a <span class="loc">BaseException</span> (3.8+), so <span class="loc">except Exception</span> cleanup handlers silently skip it on Stop/disconnect — leaking subprocesses, exit stacks, and poisoning caches.</p>
+<p><strong>Recurs in:</strong> concurrency — singleflight cache poison (<span class="loc">src/task_scheduler.py:60-94</span>), orphaned tool subprocess (<span class="loc">src/agent_loop.py:3104-3133</span>), leaked MCP AsyncExitStack (<span class="loc">src/mcp_manager.py:325-378</span>).</p>
+<p><strong>Systemic fix:</strong> move resource/Future cleanup into <span class="loc">finally</span> (or <span class="loc">except BaseException</span>) and propagate cancellation to owned child tasks/subprocesses (<span class="loc">task.cancel()</span> + await) so a Stop tears down the whole subtree deterministically.</p>
+</div>
+
+<div class="pattern">
+<h3>5. Naive datetime handling — local time stripped to naive instead of converted to UTC <span class="tag">temporal</span></h3>
+<p><strong>Root cause:</strong> the store holds naive-UTC rows, but query windows are built from tz-aware local bounds and flattened with <span class="loc">.replace(tzinfo=None)</span>, yielding naive-LOCAL compared against naive-UTC.</p>
+<p><strong>Recurs in:</strong> numeric-temporal — check-in calendar window misaligned by the owner&#39;s UTC offset (<span class="loc">src/task_scheduler.py:1205-1227</span>); related DST drift noted as a gap (<span class="loc">compute_next_run</span>).</p>
+<p><strong>Systemic fix:</strong> normalize to UTC via <span class="loc">astimezone(timezone.utc)</span> before stripping tzinfo (or stay tz-aware end-to-end); never use <span class="loc">.replace(tzinfo=None)</span> as a timezone conversion.</p>
+</div>
+
+<h2>Per-area results</h2>
+<table>
+<thead><tr><th>Area</th><th>C</th><th>H</th><th>M</th><th>L</th><th>Report</th><th>Top coverage gap</th></tr></thead>
+<tbody>
+<tr><td>Authentication, Authorization, Sessions &amp; Tokens</td><td>0</td><td>0</td><td>0</td><td>0</td><td><a href="areas/authz.html">html</a> · <a href="areas/authz.md">md</a></td><td>Full per-route IDOR audit of ~40 routers not exhaustive; spot-checked owner gates all enforce effective_user/api_token_owner.</td></tr>
+<tr><td>Injection Sinks &amp; SSRF</td><td>0</td><td>0</td><td>0</td><td>0</td><td><a href="areas/injection-ssrf.html">html</a> · <a href="areas/injection-ssrf.md">md</a></td><td>DNS-rebinding TOCTOU present-but-accepted in all three SSRF validators (host resolved at validation, httpx re-resolves at connect).</td></tr>
+<tr><td>Agent Trust Boundary &amp; Prompt-Injection</td><td>0</td><td>1</td><td>2</td><td>0</td><td><a href="areas/prompt-injection.html">html</a> · <a href="areas/prompt-injection.md">md</a></td><td>MCP native tool_calls path appends <span class="loc">role=&#39;tool&#39;</span> result_text unwrapped; resistance relies on the model treating tool results as data.</td></tr>
+<tr><td>Concurrency, Async Safety, Races &amp; Cancellation</td><td>0</td><td>0</td><td>1</td><td>2</td><td><a href="areas/concurrency.html">html</a> · <a href="areas/concurrency.md">md</a></td><td>Not every task_scheduler executor branch traced for additional CancelledError leaks beyond <span class="loc">_cached</span>.</td></tr>
+<tr><td>In-Memory State Management &amp; Invariants</td><td>0</td><td>1</td><td>0</td><td>0</td><td><a href="areas/state.html">html</a> · <a href="areas/state.md">md</a></td><td>Stream-cancellation &#39;stopped&#39; paths not fully reconciled against compaction state for partial-history persistence.</td></tr>
+<tr><td>Persistence, Transactions, Durability &amp; Migrations</td><td>0</td><td>0</td><td>2</td><td>0</td><td><a href="areas/persistence.html">html</a> · <a href="areas/persistence.md">md</a></td><td>~40 init_db() migrations not exhaustively traced for column-default backfill correctness.</td></tr>
+<tr><td>Networking, Streaming, Retry/Backoff, Timeouts</td><td>0</td><td>0</td><td>0</td><td>0</td><td><a href="areas/networking-streaming.html">html</a> · <a href="areas/networking-streaming.md">md</a></td><td>agent_loop stream <span class="loc">break</span> relies on refcount/async-gen finalizer to aclose() the httpx connection; GC timing not instrumented.</td></tr>
+<tr><td>Caching, Invalidation, RAG &amp; Embeddings</td><td>0</td><td>0</td><td>0</td><td>0</td><td><a href="areas/caching.html">html</a> · <a href="areas/caching.md">md</a></td><td>ChromaDB not exercised at runtime; relied on documented dimension-mismatch contract.</td></tr>
+<tr><td>Numeric &amp; Temporal Correctness, Scheduling</td><td>0</td><td>0</td><td>0</td><td>1</td><td><a href="areas/numeric-temporal.html">html</a> · <a href="areas/numeric-temporal.md">md</a></td><td>DST transition in compute_next_run tz path not exhaustively traced (&le; twice-yearly 1h drift).</td></tr>
+<tr><td>Tool Parsing, Execution &amp; MCP Subprocess Lifecycle</td><td>0</td><td>0</td><td>0</td><td>0</td><td><a href="areas/tools-mcp.html">html</a> · <a href="areas/tools-mcp.md">md</a></td><td>Could not confirm whether read-only list_served_models / tail_serve_output are surfaced to non-admins (possible low-sev info leak).</td></tr>
+<tr><td>Email Subsystem: IMAP/SMTP, Parsing &amp; Pollers</td><td>0</td><td>0</td><td>1</td><td>0</td><td><a href="areas/email.html">html</a> · <a href="areas/email.md">md</a></td><td>check_email_urgency alert-send sink not fully traced for header injection.</td></tr>
+<tr><td>Secrets, Resource Leaks, Process/Config Lifecycle</td><td>0</td><td>0</td><td>1</td><td>0</td><td><a href="areas/secrets-lifecycle.html">html</a> · <a href="areas/secrets-lifecycle.md">md</a></td><td>llm_core URL-logging sinks log raw target_url without redact_url (preserves userinfo; admin-only logs).</td></tr>
+<tr><td><strong>Total</strong></td><td><strong>0</strong></td><td><strong>2</strong></td><td><strong>7</strong></td><td><strong>3</strong></td><td></td><td></td></tr>
+</tbody>
+</table>
+
+<h2>Coverage map</h2>
+
+<h3>Areas inspected clean (no surviving findings)</h3>
+<ul>
+<li><strong>Authentication, Authorization, Sessions &amp; Tokens</strong> — owner gates consistently enforce <span class="loc">effective_user</span>/<span class="loc">api_token_owner</span>.</li>
+<li><strong>Injection Sinks &amp; SSRF</strong> — JSON parsing throughout (no unsafe deserialization), no server-side template injection, outbound headers from fixed keys; SSRF validators present (DNS-rebinding TOCTOU accepted per threat model).</li>
+<li><strong>Networking, Streaming, Retry/Backoff, Timeouts</strong> — shared client <span class="loc">http2=False</span>, lock-guarded cross-thread health/cache state.</li>
+<li><strong>Caching, Invalidation, RAG &amp; Embeddings</strong> — in-process dict + local file caches only; 1 candidate dropped as false positive.</li>
+<li><strong>Tool Parsing, Execution &amp; MCP Subprocess Lifecycle</strong> — admin/non-admin tool gating holds at the route layer.</li>
+</ul>
+
+<h3>Untraced / aggregated coverage gaps</h3>
+<ul>
+<li><strong>IDOR breadth:</strong> full per-route audit of ~40 owner-scoped routers not exhaustive (authz); spot-checks all enforce owner scoping.</li>
+<li><strong>SSRF DNS-rebinding TOCTOU:</strong> validated IP not pinned across all three validators — accepted under trusted-admin/private-network threat model (injection-ssrf).</li>
+<li><strong>Unwrapped LLM surfaces:</strong> MCP <span class="loc">role=&#39;tool&#39;</span> results and deep-research synthesis prompts not falsified end-to-end (prompt-injection).</li>
+<li><strong>Cancellation leaks:</strong> not every task_scheduler executor branch / streaming generator <span class="loc">finally</span> traced (concurrency, networking).</li>
+<li><strong>Migrations &amp; durability:</strong> ~40 <span class="loc">init_db()</span> migrations not exhaustively verified; SQLite WAL/busy_timeout not confirmed (&quot;database is locked&quot; is an error, not corruption) (persistence).</li>
+<li><strong>DST / schedule validation:</strong> <span class="loc">compute_next_run</span> DST path and <span class="loc">scheduled_day</span> range validation untraced; &le; twice-yearly 1h drift, owner-only impact (numeric-temporal).</li>
+<li><strong>Email sinks:</strong> <span class="loc">check_email_urgency</span> alert-send sink and <span class="loc">_send_smtp_message</span> partial-failure semantics not deeply traced; client-side <span class="loc">_sanitizeHtml</span> not fuzzed (email).</li>
+<li><strong>Secret-logging:</strong> llm_core URL-logging sinks preserve userinfo (admin-only-readable logs) (secrets-lifecycle).</li>
+<li><strong>Runtime behavior:</strong> all findings are static traces; nothing reproduced against a live model/DB/ChromaDB.</li>
+</ul>
+
+<h3>Scope areas marked N/A (with reason)</h3>
+<ul>
+<li><strong>Multi-tenant / cross-org isolation</strong> — single-host with a trusted admin; user separation is best-effort owner-scoping, not a hard tenancy boundary (authz, state, persistence).</li>
+<li><strong>External OAuth/OIDC SSO trust boundary</strong> — device flows are admin-gated provider logins, not end-user SSO (authz).</li>
+<li><strong>Unsafe deserialization / template injection / CRLF header injection</strong> — none present; JSON throughout, fixed header keys (injection-ssrf).</li>
+<li><strong>Admin-intended powerful capabilities</strong> — shell, file, email, MCP management, local model serving are by-design per <span class="loc">THREAT_MODEL.md</span> (prompt-injection, concurrency, persistence, tools-mcp, secrets-lifecycle).</li>
+<li><strong>Distributed / multi-process concerns</strong> — no Redis/memcached, no multi-replica; single-process asyncio, so cross-node key collisions, distributed stampede, and cross-process file locking are N/A (caching, state, persistence, networking).</li>
+<li><strong>HTTP/2 multiplexing &amp; cross-thread streaming races</strong> — <span class="loc">http2=False</span>; generators run on the single event loop (networking).</li>
+<li><strong>Weak crypto / insecure-random tokens / timing side-channels</strong> — <span class="loc">secrets.*</span> and <span class="loc">secrets.compare_digest</span>/bcrypt used; no hardcoded credentials (secrets-lifecycle).</li>
+<li><strong>Server-side stored-XSS from email HTML</strong> — rendered only in-browser via client-side sanitizer; no server-side raw-HTML template (email).</li>
+<li><strong>Monetary float / integer-overflow numerics</strong> — no currency arithmetic; Python arbitrary-precision ints (numeric-temporal).</li>
+</ul>
+
+<footer>
+Generated by an automated multi-agent audit: parallel per-area finders → independent adversarial verification (2 false positives dropped) → per-area reports → this synthesis. All findings are static control/data-flow traces; the application was not dynamically executed. The <span class="loc">/visual-explainer</span> skill was unavailable, so these self-contained HTML reports were produced by hand with a shared stylesheet.
+</footer>
+
+</div>
+</body>
+</html>

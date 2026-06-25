@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Injection Sinks &amp; SSRF — Audit</title>
+<style>
+:root{--bg:#0f1117;--panel:#171a21;--panel2:#1d212b;--border:#2a2f3a;--text:#e6e8ee;--muted:#9aa3b2;--accent:#5b9dff;--crit:#ff4d5e;--high:#ff8a3d;--med:#ffcf4d;--low:#6ea8ff;--ok:#36d399}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 24px 90px}
+header.rep{border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:26px}
+h1{font-size:27px;margin:0 0 6px;font-weight:750;letter-spacing:-.3px}
+h2{font-size:19px;margin:38px 0 14px;border-left:3px solid var(--accent);padding-left:11px}
+h3{font-size:16px;margin:0 0 10px}
+.sub{color:var(--muted);font-size:14px;margin:0}
+.rollup{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:92px}
+.stat .n{font-size:25px;font-weight:750;line-height:1}
+.stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:5px}
+.badge{display:inline-block;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:999px;color:#0b0d12}
+.badge.crit{background:var(--crit)}.badge.high{background:var(--high)}.badge.med{background:var(--med)}.badge.low{background:var(--low)}.badge.ok{background:var(--ok)}
+.l-crit{color:var(--crit)}.l-high{color:var(--high)}.l-med{color:var(--med)}.l-low{color:var(--low)}.l-ok{color:var(--ok)}
+.card{background:var(--panel);border:1px solid var(--border);border-left-width:4px;border-radius:10px;padding:18px 20px;margin:14px 0}
+.card.crit{border-left-color:var(--crit)}.card.high{border-left-color:var(--high)}.card.med{border-left-color:var(--med)}.card.low{border-left-color:var(--low)}
+.card h3{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:12px 0;font-size:14px}
+.meta .k{color:var(--muted);white-space:nowrap}
+.loc{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--accent)}
+pre{background:#0b0d12;border:1px solid var(--border);border-radius:8px;padding:14px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;color:#cdd3df;white-space:pre-wrap;word-break:break-word}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+tr:hover td{background:var(--panel2)}
+.pattern{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin:12px 0}
+.tag{display:inline-block;font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:2px 7px;border-radius:6px}
+.verdict{font-size:11px;padding:2px 7px;border-radius:6px;border:1px solid var(--border)}
+.verdict.real{color:var(--ok);border-color:var(--ok)}.verdict.uncertain{color:var(--med);border-color:var(--med)}
+.muted{color:var(--muted)}.small{font-size:13px}
+footer{margin-top:54px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="rep">
+<h1>Injection Sinks &amp; SSRF</h1>
+<p class="sub">SSRF, command injection, path traversal, CRLF/header/template injection, and unsafe deserialization across webhook, LLM base_url, fetch/search, upload/document, integration, cookbook-SSH, and model-probe paths — no confirmed exploitable findings.</p>
+<p class="small"><a href="../index.html">&larr; back to dashboard</a></p>
+<div class="rollup">
+<div class="stat"><div class="n l-crit">0</div><div class="l">Critical</div></div>
+<div class="stat"><div class="n l-high">0</div><div class="l">High</div></div>
+<div class="stat"><div class="n l-med">0</div><div class="l">Medium</div></div>
+<div class="stat"><div class="n l-low">0</div><div class="l">Low</div></div>
+<div class="stat"><div class="n l-ok">0</div><div class="l">FP dropped</div></div>
+</div>
+</header>
+
+<p>No findings reached a "real" or "uncertain" verification status in this area. Every candidate sink was traced from untrusted input to the dangerous use and confirmed to have validation that runs <em>before</em> the sink and is not bypassable within the documented (trusted-admin / private-network) threat model. The only residual items are an accepted DNS-rebinding TOCTOU note and two scope-boundary coverage gaps, all recorded below for visibility.</p>
+
+<h2>Sub-areas inspected clean</h2>
+<table>
+<thead><tr><th>Area</th><th>Why it is clean</th></tr></thead>
+<tbody>
+<tr><td>Webhook SSRF<br><span class="loc">src/webhook_manager.py</span></td><td><code>validate_webhook_url</code> resolves DNS and blocks IPv4-mapped IPv6, private/loopback/link-local/reserved/multicast/unspecified ranges + metadata/localhost/<code>.internal</code> suffixes; fails closed on unresolvable hosts; re-validates at delivery; client uses <code>follow_redirects=False</code>. Validation runs before any POST. CRUD + test all <code>require_admin</code>.</td></tr>
+<tr><td>LLM base_url SSRF<br><span class="loc">src/url_security.py, routes/webhook_routes.py</span></td><td>Token-supplied <code>base_url</code> passes <code>validate_public_http_url</code> (blocks 0.0.0.0/8, 100.64/10, 127/8, 169.254/16, RFC1918, ::1, fc00::/7, fe80::/10, metadata hosts, <code>.internal</code>/<code>.lan</code>; IP-literal + DNS-resolved checks; fails closed on DNS error). Downstream client created without <code>follow_redirects</code>.</td></tr>
+<tr><td>Search content fetch<br><span class="loc">services/search/content.py</span></td><td><code>_get_public_url</code> does capped streaming with manual redirect handling, re-runs <code>_public_http_url()</code> on every hop before connecting, forces <code>Accept-Encoding: identity</code>, refuses over-cap bodies via Content-Length preflight.</td></tr>
+<tr><td>Search providers<br><span class="loc">services/search/providers.py</span></td><td>All endpoints hardcoded vendor hosts; only SearXNG URL is admin-settings-derived. No agent-controlled host reaches httpx; queries passed as <code>params</code>. <code>_resolve_ddg_redirect</code> only unwraps <code>uddg</code> from genuine duckduckgo.com <code>/l</code> paths.</td></tr>
+<tr><td>Uploads<br><span class="loc">routes/upload_routes.py, src/upload_handler.py</span></td><td>IDs gated by <code>UPLOAD_ID_RE</code>; <code>secure_filename</code> strips separators; <code>os.walk(followlinks=False)</code> + <code>commonpath(realpath)</code> containment; download/vision routes enforce owner-or-admin. No traversal via <code>file_id</code>.</td></tr>
+<tr><td>Documents / PDF<br><span class="loc">routes/document_routes.py, routes/document_helpers.py</span></td><td><code>upload_ids</code> resolved via <code>resolve_upload</code> with owner/auth + <code>_upload_path_inside</code> containment; <code>_verify_doc_owner</code> gates every read/write; signature IDs filtered by owner. No IDOR/traversal.</td></tr>
+<tr><td>Integrations<br><span class="loc">src/integrations.py</span></td><td><code>execute_api_call</code> normalizes base_url (http(s)+host, no query/fragment); path must start <code>/</code>, rejects <code>://</code> and <code>#</code>; <code>_join_integration_url</code> lstrips leading slashes so <code>//evil.com</code> collapses to a path on the admin's own host. Base is admin-configured.</td></tr>
+<tr><td>Cookbook SSH/subprocess<br><span class="loc">routes/cookbook_routes.py</span></td><td><code>require_admin</code> on handlers; <code>remote_host</code> via <code>_REMOTE_HOST_RE</code> (blocks <code>-</code>-prefixed option injection); <code>ssh_port</code> via <code>_SSH_PORT_RE</code>; payloads built with <code>shlex.quote</code>; <code>session_id</code> gated by <code>_SESSION_ID_RE</code>. Admin shell/serve by design.</td></tr>
+<tr><td>YouTube handler<br><span class="loc">services/youtube/youtube_handler.py</span></td><td>yt-dlp via <code>create_subprocess_exec</code> (no shell); <code>video_id</code> embedded as a single argv element inside an <code>https://...watch?v=</code> URL, so it cannot be parsed as a flag and metacharacters are inert.</td></tr>
+<tr><td>Model routes<br><span class="loc">routes/model_routes.py</span></td><td>Every probe/ping/create/test/discover route is <code>require_admin</code>-gated; unauthenticated <code>/api/models</code> and <code>/api/tools</code> GETs return only cached owner-filtered lists, never an outbound probe to a caller-supplied URL.</td></tr>
+</tbody>
+</table>
+
+<h2>Coverage gaps</h2>
+<div class="pattern">
+<p><strong>DNS-rebinding TOCTOU (present-but-accepted)</strong> — present in all three validators (<span class="loc">webhook_manager._is_private_url</span>, <span class="loc">url_security.validate_public_http_url</span>, <span class="loc">content._get_public_url</span>): the host is resolved during validation, then httpx re-resolves at connect time, so a fast-flipping attacker DNS could pass validation then connect to an internal IP. All three explicitly document this as partial defense; the validated IP is not pinned. Not weaponizable into a high-confidence static finding and consistent with the trusted-admin/private-network threat model. Flagged for visibility only.</p>
+</div>
+<ul>
+<li><strong>Fetched-HTML wrapping not exhaustively traced</strong> — did not exhaustively trace every consumer of <code>fetch_webpage_content</code>/search results into the agent loop to confirm untrusted fetched HTML is always wrapped via <code>prompt_security.untrusted_context_message</code> before the LLM. That wrapper-bypass lens belongs to the prompt-injection assignment; only the fetch/SSRF side was confirmed here.</li>
+<li><strong>model_routes.py partial read</strong> — lines 1-1313 read line-by-line; the route map (decorators + auth) for 1314-2436 was extracted via grep rather than a full read. Auth gating on all probe routes confirmed, but per-handler body logic past 1314 not fully traced.</li>
+</ul>
+
+<h2>Assumptions made</h2>
+<ul>
+<li><code>httpx.AsyncClient</code>/<code>httpx.stream</code> default to <code>follow_redirects=False</code> (documented httpx default; code does not set it), so a redirect to an internal host is returned as 3xx rather than followed for the LLM and webhook clients.</li>
+<li><code>socket.getaddrinfo</code> in the SSRF validators returns the same address set the kernel uses for the subsequent connect within a normal (non-adversarial-DNS) window.</li>
+<li>Cookbook state (tasks/remote_host/ssh_port) is only admin-writable; the regex validation is defense-in-depth on top of that trust boundary.</li>
+<li><code>ModelEndpoint</code> rows (base_url) are only creatable by admins via <code>require_admin</code>-gated routes, so admin-configured endpoints pointing at private/LAN model servers are by design and not SSRF.</li>
+</ul>
+
+<h2>N/A scope areas</h2>
+<table>
+<thead><tr><th>Sub-lens</th><th>Reason N/A</th></tr></thead>
+<tbody>
+<tr><td>Unsafe deserialization (yaml.load / pickle / eval)</td><td>No <code>yaml.load</code> without SafeLoader, <code>pickle.loads</code>, or <code>eval</code> of untrusted input in assigned files; JSON parsed via <code>json.loads</code> throughout.</td></tr>
+<tr><td>Template injection</td><td>No Jinja/string-format templating of untrusted input into a server-side template engine; integration payload templates (<code>&#123;&#123;title&#125;&#125;</code>) are simple string substitution into HTTP bodies, not server-side eval.</td></tr>
+<tr><td>CRLF / header injection</td><td>Outbound headers built from fixed keys + admin/token-supplied API keys via httpx (rejects newlines in header values); no untrusted value concatenated into a raw header line.</td></tr>
+</tbody>
+</table>
+
+<h2>False positives dropped</h2>
+<p>0 candidates were dropped as false positives.</p>
+
+<footer>
+Methodology: each untrusted-input source was traced to its dangerous sink and the ordering / bypassability of validation was checked against DNS-rebind, redirect, IPv6/decimal/[::]/0.0.0.0, and link-local-metadata vectors, plus path-traversal, command-injection, deserialization, and CRLF lenses. Generated by an automated multi-agent deep correctness &amp; security audit; verdicts reflect skeptic-reviewed verification.
+</footer>
+</div>
+</body>
+</html>
