@@ -1,0 +1,58 @@
+# Publish the security-audit reports (audit/) to GitHub Pages.
+#
+# The audit dashboard and per-area reports are static, self-contained HTML.
+# This workflow copies the audit/ folder onto an orphan `gh-pages` branch.
+# To serve it: Settings -> Pages -> "Deploy from a branch" -> gh-pages / (root).
+# It deliberately does NOT touch docs/ (the project's own landing-page demo).
+#
+# Single SHA-pinned action + least-privilege, default-deny token so the
+# workflow-security gate (actionlint + zizmor) stays green.
+
+name: Deploy audit to Pages
+
+on:
+  push:
+    branches: [claude/vigilant-noether-wd43qi, dev, main]
+    paths:
+      - 'audit/**'
+      - '.github/workflows/deploy-audit-pages.yml'
+  workflow_dispatch:
+
+# Default-deny; the one job opts in to exactly what it needs.
+permissions: {}
+
+concurrency:
+  group: deploy-audit-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publish audit/ to gh-pages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # push the orphan gh-pages branch
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Publish audit/ to gh-pages branch
+        env:
+          GIT_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -f audit/index.html
+          work="$(mktemp -d)"
+          cp -R audit/. "$work/"
+          # Disable Jekyll so files (incl. any starting with _) serve verbatim.
+          touch "$work/.nojekyll"
+          cd "$work"
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Deploy audit reports (${GITHUB_SHA})"
+          git push -f \
+            "https://x-access-token:${GIT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            gh-pages
