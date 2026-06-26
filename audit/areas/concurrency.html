@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Concurrency, Async Safety, Races &amp; Cancellation — Audit</title>
+<style>
+:root{--bg:#0f1117;--panel:#171a21;--panel2:#1d212b;--border:#2a2f3a;--text:#e6e8ee;--muted:#9aa3b2;--accent:#5b9dff;--crit:#ff4d5e;--high:#ff8a3d;--med:#ffcf4d;--low:#6ea8ff;--ok:#36d399}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 24px 90px}
+header.rep{border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:26px}
+h1{font-size:27px;margin:0 0 6px;font-weight:750;letter-spacing:-.3px}
+h2{font-size:19px;margin:38px 0 14px;border-left:3px solid var(--accent);padding-left:11px}
+h3{font-size:16px;margin:0 0 10px}
+.sub{color:var(--muted);font-size:14px;margin:0}
+.rollup{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:92px}
+.stat .n{font-size:25px;font-weight:750;line-height:1}
+.stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:5px}
+.badge{display:inline-block;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:999px;color:#0b0d12}
+.badge.crit{background:var(--crit)}.badge.high{background:var(--high)}.badge.med{background:var(--med)}.badge.low{background:var(--low)}.badge.ok{background:var(--ok)}
+.l-crit{color:var(--crit)}.l-high{color:var(--high)}.l-med{color:var(--med)}.l-low{color:var(--low)}.l-ok{color:var(--ok)}
+.card{background:var(--panel);border:1px solid var(--border);border-left-width:4px;border-radius:10px;padding:18px 20px;margin:14px 0}
+.card.crit{border-left-color:var(--crit)}.card.high{border-left-color:var(--high)}.card.med{border-left-color:var(--med)}.card.low{border-left-color:var(--low)}
+.card h3{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:12px 0;font-size:14px}
+.meta .k{color:var(--muted);white-space:nowrap}
+.loc{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--accent)}
+pre{background:#0b0d12;border:1px solid var(--border);border-radius:8px;padding:14px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;color:#cdd3df;white-space:pre-wrap;word-break:break-word}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+tr:hover td{background:var(--panel2)}
+.pattern{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin:12px 0}
+.tag{display:inline-block;font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:2px 7px;border-radius:6px}
+.verdict{font-size:11px;padding:2px 7px;border-radius:6px;border:1px solid var(--border)}
+.verdict.real{color:var(--ok);border-color:var(--ok)}.verdict.uncertain{color:var(--med);border-color:var(--med)}
+.muted{color:var(--muted)}.small{font-size:13px}
+footer{margin-top:54px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="rep">
+<h1>Concurrency, Async Safety, Races &amp; Cancellation</h1>
+<p class="sub">Cancellation-safety gaps in singleflight caching, agent tool execution, and MCP connect leave shared state poisoned or external resources leaked because <code>except Exception</code> does not catch <code>asyncio.CancelledError</code>.</p>
+<p class="small"><a href="../index.html">&larr; back to dashboard</a></p>
+<div class="rollup">
+<div class="stat"><div class="n l-crit">0</div><div class="l">Critical</div></div>
+<div class="stat"><div class="n l-high">0</div><div class="l">High</div></div>
+<div class="stat"><div class="n l-med">1</div><div class="l">Medium</div></div>
+<div class="stat"><div class="n l-low">2</div><div class="l">Low</div></div>
+<div class="stat"><div class="n l-ok">0</div><div class="l">Dropped FP</div></div>
+</div>
+</header>
+
+<h2>Findings</h2>
+
+<div class="card med">
+<h3><span>CancelledError in <code>_cached()</code> owner leaks an unresolved pending future, permanently poisoning the shared singleflight cache key</span><span><span class="badge med">Medium</span> <span class="verdict real">real</span></span></h3>
+<div class="meta">
+<div class="k">Severity</div><div>Medium — durable (process-lifetime) cross-user availability loss of shared scheduled-task fetches, triggerable by a non-admin.</div>
+<div class="k">Confidence</div><div>Confirmed by trace. Preconditions: two or more users have check-in/digest tasks touching the same shared integration (same Miniflux <code>base_url</code>, or same MCP server snapshot tool); one user's task is the singleflight owner suspended inside <code>_cached</code> at <code>await fetch()</code> (httpx GET up to ~10s, or <code>mcp.call_tool</code>) or at the line-85 lock; that task is cancelled (most directly via the owning non-admin user's <code>POST /tasks/{task_id}/stop</code>). No special privilege required.</div>
+<div class="k">Location</div><div><span class="loc">src/task_scheduler.py:60-94</span> (owner 83-94); callers <span class="loc">:1302, :1339</span>; cancel source <span class="loc">:2089-2102</span></div>
+<div class="k">Invariant violated</div><div>The owner of an in-flight singleflight key must ALWAYS remove <code>_shared_cache_pending[key]</code> and resolve the future before exiting on every path. <code>except Exception</code> does not catch <code>asyncio.CancelledError</code> (a <code>BaseException</code>), so cleanup is bypassed.</div>
+<div class="k">Why it matters</div><div>If the owner is cancelled at <code>await fetch()</code> (84) or the success-path lock (85), neither 87/88 nor 92/93 runs. The pending dict keeps an unresolved Future and the cache entry is never written. (1) Every waiter at <code>await pending</code> (82) hangs forever (lost wakeup). (2) Every future caller for that key re-reads the stale future (71-74) and also hangs. Keys are process-global and shared across users, so one user stopping their own task can hang other users' scheduled tasks until process restart.</div>
+<div class="k">Trigger</div><div>A scheduled check-in/digest task becomes the singleflight owner and suspends inside <code>await fetch()</code>; the owning non-admin user clicks Stop &rarr; <code>stop_task()</code> &rarr; <code>handle.cancel()</code> (:2093) delivers CancelledError; cleanup is skipped; the key is poisoned for everyone. Triggerable by any non-admin task owner.</div>
+<div class="k">Fix direction</div><div>Wrap the owner body in <code>try/except BaseException</code> or a <code>finally</code> that always pops the key and, if the future is not done, calls <code>pending.cancel()</code> (or <code>set_exception</code>) so waiters wake; re-raise CancelledError.</div>
+<div class="k">Root cause</div><div><span class="tag">lost-wakeup</span></div>
+</div>
+<pre>83  try:
+84      val = await fetch()
+85      async with _shared_cache_lock:
+86          _shared_cache[key] = (time.monotonic() + ttl, val)
+87          _shared_cache_pending.pop(key, None)
+88      pending.set_result(val)
+89      return val
+90  except Exception as e:   # CancelledError (BaseException) NOT caught
+91      async with _shared_cache_lock:
+92          _shared_cache_pending.pop(key, None)
+93      pending.set_exception(e)
+94      raise
+--- waiter path ---
+81  if not owner:
+82      return await pending   # hangs forever if owner cancelled
+--- stop trigger ---
+2093  if handle and not handle.done():
+2094      handle.cancel()</pre>
+</div>
+
+<div class="card low">
+<h3><span>Orphaned tool-execution task (running bash/python subprocess) on agent-turn cancellation</span><span><span class="badge low">Low</span> <span class="verdict real">real</span></span></h3>
+<div class="meta">
+<div class="k">Severity</div><div>Low — owner-triggered only, bounded by the 3600s tool timeout, side effects owner-initiated; cancellation-correctness / resource-leak, not a security-boundary bug.</div>
+<div class="k">Confidence</div><div>Confirmed by trace (empirically reproduced: detached <code>_tool_task</code> was NOT cancelled, ran to completion). Preconditions: session owner runs a long bash/python tool, then either (a) presses Stop on a normal/detached run (<code>agent_runs.stop</code> &rarr; <code>task.cancel</code> &rarr; <code>agen.aclose</code>), or (b) disconnects the SSE client in compare_mode, while <code>stream_agent_loop</code> is suspended at :3127 or :3133.</div>
+<div class="k">Location</div><div><span class="loc">src/agent_loop.py:3104-3133</span></div>
+<div class="k">Invariant violated</div><div>A child task owning external resources (a bash/python subprocess via <code>execute_tool_block</code>) must be cancelled/awaited on every parent exit path, including GeneratorExit on the parent async generator. Awaiting a Task does not cancel it when the awaiter is cancelled.</div>
+<div class="k">Why it matters</div><div>If the generator is cancelled while suspended at <code>await _progress_q.get()</code> (3127) or <code>await _tool_task</code> (3133), <code>_tool_task</code> is not cancelled. The orphaned <code>_run_tool</code> keeps the subprocess running up to the 3600s timeout with no consumer, leaking CPU/process resources and partial side effects after the user pressed Stop.</div>
+<div class="k">Trigger</div><div>Long bash/python tool in flight; user presses Stop on a normal run, or SSE client disconnects in compare_mode. Session owner (any user). In default detached mode a bare SSE disconnect does NOT cancel the run by design.</div>
+<div class="k">Fix direction</div><div>Wrap the drain loop and <code>await _tool_task</code> in <code>try/finally</code>; in finally, if <code>not _tool_task.done()</code> cancel and await it (suppressing CancelledError) so the subprocess is torn down with the turn.</div>
+<div class="k">Root cause</div><div><span class="tag">resource-leak</span></div>
+</div>
+<pre>3123  _tool_task = asyncio.create_task(_run_tool())
+3126  while True:
+3127      evt = await _progress_q.get()   # cancel here -&gt; _tool_task orphaned
+3128      if evt is None:
+3129          break
+...
+3133  desc, result = await _tool_task   # cancel here -&gt; inner task keeps running</pre>
+</div>
+
+<div class="card low">
+<h3><span>Cancelled background HTTP MCP connect leaks its AsyncExitStack (transport/subprocess)</span><span><span class="badge low">Low</span> <span class="verdict real">real</span></span></h3>
+<div class="meta">
+<div class="k">Severity</div><div>Low — admin-only action within the trusted boundary, finite per-occurrence leak, no privilege/auth/secret-leak impact.</div>
+<div class="k">Confidence</div><div>Confirmed by trace. Preconditions: admin connects an HTTP/OAuth MCP server (background connect in flight during OAuth discovery/DCR/slow network), then calls <code>disconnect_server</code> / deletes the server (or reconnect churn) while <code>_connect_http</code> is suspended at line 343 (<code>streamablehttp_client</code>) or 345 (<code>ClientSession</code>) — before line 358 stores the stack.</div>
+<div class="k">Location</div><div><span class="loc">src/mcp_manager.py:325-378</span> (<code>_connect_http</code>), <span class="loc">:380-404</span> (<code>disconnect_server</code>, cancel at 384-386)</div>
+<div class="k">Invariant violated</div><div><code>disconnect_server</code> must guarantee the transport/exit-stack is closed exactly once. The only <code>aclose()</code> path is via <code>disconnect_server</code> popping <code>self._stacks</code>; <code>_connect_http</code> catches only <code>except Exception</code> (375), so a CancelledError at the pending await (343/345) before the stack is stored (358) leaves the local <code>AsyncExitStack</code> (httpx transport + anyio task group) never closed. The secondary "re-population" claim does NOT trigger (no interleaving await between 358 and completion) and was excluded.</div>
+<div class="k">Why it matters</div><div><code>disconnect_server</code> cancels the task (386) but does not await it, then pops <code>_stacks</code> (None at that moment). The in-flight stack's transport/ClientSession is never <code>aclose()</code>'d &rarr; leaked httpx connection / anyio task group, with nothing to later clean it up.</div>
+<div class="k">Trigger</div><div>Admin connects an HTTP/OAuth MCP server and disconnects/deletes it (or reconnect churn) before the connect completes. Admin-only, within the trusted boundary; reported as a cancellation-safety resource leak, not a privilege issue.</div>
+<div class="k">Fix direction</div><div>In <code>_connect_http</code>, use <code>try/finally</code> (or <code>except BaseException</code>) to <code>aclose()</code> the stack on cancellation; in <code>disconnect_server</code>, await the cancelled connect task (suppressing CancelledError) before popping/closing state.</div>
+<div class="k">Root cause</div><div><span class="tag">resource-leak</span></div>
+</div>
+<pre>384  task = self._connect_tasks.pop(server_id, None)
+385  if task is not None and not task.done():
+386      task.cancel()   # not awaited
+393  stack = self._stacks.pop(server_id, None)  # likely None here
+--- _connect_http ---
+342  stack = AsyncExitStack()
+343  transport = await stack.enter_async_context(streamablehttp_client(url, auth=provider))  # cancel here -&gt; stack never aclosed
+358  self._stacks[server_id] = stack
+375  except Exception as e:  # CancelledError not caught -&gt; no aclose</pre>
+</div>
+
+<h2>Systemic pattern</h2>
+<div class="pattern">
+<strong>Bare <code>except Exception</code> as the cleanup path on a cancellable coroutine.</strong> All three findings share one root: external resources (a shared future, a subprocess, an HTTP transport stack) are released only inside <code>except Exception</code> / success branches, never in a <code>finally</code> or <code>except BaseException</code>. Because <code>asyncio.CancelledError</code> derives from <code>BaseException</code>, a Stop/disconnect/disconnect-server delivered at an inner await skips cleanup entirely, leaving poisoned shared state or leaked resources. The structural fix is the same in each case: move release into a <code>finally</code> (or catch <code>BaseException</code>) and re-raise.
+</div>
+
+<h2>Coverage</h2>
+
+<h3>Sub-areas inspected clean</h3>
+<table>
+<tr><th>Component</th><th>Why clean</th></tr>
+<tr><td><code>service_health._bounded_map</code></td><td><code>out</code> mutated only on main thread in the as_completed loop; workers return dicts. Executor shut down <code>wait=False</code>/<code>cancel_futures</code> in finally on every path.</td></tr>
+<tr><td><code>service_health.collect_service_health</code></td><td>Per-subsystem <code>wait_for</code> + <code>to_thread</code> + overall <code>wait_for</code>; deadlines bounded, TimeoutError handled, no leaked awaitables corrupting state.</td></tr>
+<tr><td><code>task_scheduler._check_due_tasks</code></td><td>Snapshot + add to <code>_executing</code> both under <code>_executing_lock</code>; dispatch outside lock but IDs reserved, no double-dispatch.</td></tr>
+<tr><td><code>task_scheduler.run_task_now</code> / <code>_run_chained</code></td><td>In-flight guard check+add atomic under lock (no await between); <code>force=True</code> bypass intentional.</td></tr>
+<tr><td><code>task_scheduler._execute_task finally</code></td><td>Handle pop guarded by <code>handle is current</code>; <code>_executing.discard</code> under lock — release correct for the normal path.</td></tr>
+<tr><td><code>session_manager</code> message ops</td><td>Fully synchronous (no awaits) so single-threaded asyncio gives no interleaving on <code>session.history</code>; each DB op uses its own SessionLocal with commit/rollback/close.</td></tr>
+<tr><td><code>embedding_lanes._get_or_reset_collection</code></td><td>numpy-truthiness ValueError trap handled with explicit None/len checks; chroma calls synchronous (no await interleaving).</td></tr>
+</table>
+
+<h3>Coverage gaps</h3>
+<ul>
+<li>Did not exhaustively trace every task_scheduler executor branch (<code>_execute_llm_task</code>, <code>_execute_research_task</code>, <code>_execute_action</code>) for additional CancelledError leaks beyond <code>_cached</code>; <code>_execute_task_locked</code>'s outer CancelledError handler (840-860) covers the common case.</li>
+<li>Did not confirm whether <code>build_embedding_lanes</code> is ever run under <code>asyncio.to_thread</code> concurrently for the same base_name (possible race on <code>get_or_create_collection</code> in chromadb itself).</li>
+<li>Did not load the full agent_loop streaming generator's outer try/finally; grep shows no finally around lines 3123-3133.</li>
+</ul>
+
+<h3>Assumptions made</h3>
+<ul>
+<li><code>asyncio.CancelledError</code> subclasses <code>BaseException</code> (Python 3.8+), so <code>except Exception</code> does not catch it — core premise of the <code>_cached</code> and MCP-connect findings.</li>
+<li><code>stop_task</code> &rarr; <code>handle.cancel()</code> delivers CancelledError into the running <code>_execute_task</code> coroutine at its current await point.</li>
+<li><code>_cached</code> callers (<code>_fetch_miniflux</code>, <code>_call_mcp</code>) perform real awaits (HTTP/MCP) long enough for a cancellation to land mid-fetch.</li>
+<li>Awaiting a Task and then being cancelled does NOT propagate cancellation into the awaited Task — basis for the agent_loop orphan finding.</li>
+</ul>
+
+<h3>N/A scope areas</h3>
+<ul>
+<li>Pure prompt-injection wrapper bypass and authz/IDOR are outside this concurrency lens (email_pollers calendar extraction wraps untrusted email as data and is owner-scoped; not a concurrency issue).</li>
+<li>Admin-intended powerful capabilities (shell, MCP management, model serving) are by-design per THREAT_MODEL — the MCP-connect leak is reported only as a cancellation-safety resource leak.</li>
+</ul>
+
+<h3>Candidates dropped as false positives</h3>
+<p>0</p>
+
+<footer>
+Methodology: each candidate was independently re-traced against current source and given a skeptic verdict; only findings verified "real" (or "uncertain") are reported, with verifier-corrected severities. Generated by an automated multi-agent deep-correctness &amp; security audit.
+</footer>
+</div>
+</body>
+</html>

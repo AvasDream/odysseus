@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tool Parsing, Execution &amp; MCP Subprocess Lifecycle — Audit</title>
+<style>
+:root{--bg:#0f1117;--panel:#171a21;--panel2:#1d212b;--border:#2a2f3a;--text:#e6e8ee;--muted:#9aa3b2;--accent:#5b9dff;--crit:#ff4d5e;--high:#ff8a3d;--med:#ffcf4d;--low:#6ea8ff;--ok:#36d399}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 24px 90px}
+header.rep{border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:26px}
+h1{font-size:27px;margin:0 0 6px;font-weight:750;letter-spacing:-.3px}
+h2{font-size:19px;margin:38px 0 14px;border-left:3px solid var(--accent);padding-left:11px}
+h3{font-size:16px;margin:0 0 10px}
+.sub{color:var(--muted);font-size:14px;margin:0}
+.rollup{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:92px}
+.stat .n{font-size:25px;font-weight:750;line-height:1}
+.stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:5px}
+.badge{display:inline-block;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:999px;color:#0b0d12}
+.badge.crit{background:var(--crit)}.badge.high{background:var(--high)}.badge.med{background:var(--med)}.badge.low{background:var(--low)}.badge.ok{background:var(--ok)}
+.l-crit{color:var(--crit)}.l-high{color:var(--high)}.l-med{color:var(--med)}.l-low{color:var(--low)}.l-ok{color:var(--ok)}
+.card{background:var(--panel);border:1px solid var(--border);border-left-width:4px;border-radius:10px;padding:18px 20px;margin:14px 0}
+.card.crit{border-left-color:var(--crit)}.card.high{border-left-color:var(--high)}.card.med{border-left-color:var(--med)}.card.low{border-left-color:var(--low)}
+.card h3{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:12px 0;font-size:14px}
+.meta .k{color:var(--muted);white-space:nowrap}
+.loc{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--accent)}
+pre{background:#0b0d12;border:1px solid var(--border);border-radius:8px;padding:14px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;color:#cdd3df;white-space:pre-wrap;word-break:break-word}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+tr:hover td{background:var(--panel2)}
+.pattern{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin:12px 0}
+.tag{display:inline-block;font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:2px 7px;border-radius:6px}
+.verdict{font-size:11px;padding:2px 7px;border-radius:6px;border:1px solid var(--border)}
+.verdict.real{color:var(--ok);border-color:var(--ok)}.verdict.uncertain{color:var(--med);border-color:var(--med)}
+.muted{color:var(--muted)}.small{font-size:13px}
+footer{margin-top:54px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="rep">
+<h1>Tool Parsing, Execution &amp; MCP Subprocess Lifecycle</h1>
+<p class="sub">Tool-call parsing edge cases, dispatch-time authorization re-checks, internal-tool loopback gating, MCP subprocess lifecycle, and untrusted tool-output handling. No confirmed findings; inspected clean with two unresolved coverage gaps.</p>
+<p class="small"><a href="../index.html">&larr; back to dashboard</a></p>
+<div class="rollup">
+<div class="stat"><span class="n l-crit">0</span><div class="l">Critical</div></div>
+<div class="stat"><span class="n l-high">0</span><div class="l">High</div></div>
+<div class="stat"><span class="n l-med">0</span><div class="l">Medium</div></div>
+<div class="stat"><span class="n l-low">0</span><div class="l">Low</div></div>
+<div class="stat"><span class="n l-ok">0</span><div class="l">Dropped FP</div></div>
+</div>
+</header>
+
+<h2>Findings</h2>
+<div class="pattern">
+<p>No findings were verified as <span class="l-ok">real</span> or <span class="l-med">uncertain</span> in this area. Every candidate inspected resolved to a correct, fail-closed control or an accepted design decision. The two items in the Coverage section are documented as <strong>unresolved coverage gaps</strong>, not confirmed findings. Zero candidates were dropped as false positives.</p>
+</div>
+
+<h2>Sub-areas inspected clean</h2>
+<table>
+<thead><tr><th>Sub-area</th><th>Location</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td>Tool DISPATCH authorization re-check: <code>_ADMIN_TOOLS</code> and <code>is_public_blocked_tool()</code> run before every dispatch branch; <code>mcp__</code> prefix gate protects the inline-check-free <code>mcp__</code> branch; email tools coerced to <code>mcp__email__*</code> caught by same gate.</td><td><span class="loc">tool_execution.py:624,630,889</span> / <span class="loc">tool_security.py:166</span></td><td>clean</td></tr>
+<tr><td><code>owner_is_admin_or_single_user</code> fails closed pre-setup and on exceptions; <code>True</code> only for AUTH_DISABLED single-user or confirmed admin; reserved <code>internal-tool</code> is not a real admin.</td><td><span class="loc">tool_security.py:169-196</span></td><td>clean</td></tr>
+<tr><td>Internal-tool loopback: <code>owner</code> threaded through dispatch and admin re-derived from it; loopback token identity never trusted at dispatch; email MCP owner force-set server-side after model arg parse (no <code>_odysseus_owner</code> spoof).</td><td><span class="loc">tool_execution.py:898-900</span></td><td>clean</td></tr>
+<tr><td>Untrusted tool-output wrapping: non-native path wraps via <code>untrusted_context_message</code>; native <code>role:'tool'</code> path unwrapped but documented, tested, and covered by system <code>UNTRUSTED_CONTEXT_POLICY</code> preamble — accepted design.</td><td><span class="loc">agent_loop.py:1677-1683,1696</span> / <span class="loc">chat_processor.py:203</span></td><td>clean</td></tr>
+<tr><td>Tool-call parser: multiple/nested/extra calls parsed only from model <code>round_response</code>, never tool results; native-vs-fenced mutually exclusive (no double-dispatch); bad MCP names fail-safe dropped; email non-object args fail closed.</td><td><span class="loc">tool_parsing.py</span> / <span class="loc">tool_schemas.py:1232-1235</span></td><td>clean</td></tr>
+<tr><td>MCP subprocess cleanup: connect paths use <code>AsyncExitStack</code> + <code>aclose()</code> on failure; <code>disconnect_server</code> cancels in-flight connect task, clears auth url, acloses stack on every path.</td><td><span class="loc">mcp_manager.py:194-206,255-267,380-404</span></td><td>clean</td></tr>
+<tr><td>MCP schema rendering treats third-party tool names/types as untrusted: <code>_sanitize_schema_token</code> strips control chars, length-caps; param count &amp; hint length capped.</td><td><span class="loc">mcp_manager.py:44-92</span></td><td>clean</td></tr>
+<tr><td>Path confinement for read/write/grep/glob/ls: sensitive-basename denylist first, allowlist containment via <code>commonpath</code>, workspace confinement contextvar set per turn and reset in <code>finally</code>.</td><td><span class="loc">tool_execution.py:139-288,521-548</span></td><td>clean</td></tr>
+</tbody>
+</table>
+
+<h2>Coverage gaps (unresolved)</h2>
+<div class="card med">
+<h3>Read-only model-serving tools may be callable by non-admins <span class="verdict uncertain">UNRESOLVED</span></h3>
+<div class="meta">
+<div class="k">Preconditions</div><div>Tools <code>list_served_models</code> / <code>tail_serve_output</code> are in neither <code>NON_ADMIN_BLOCKED_TOOLS</code> nor <code>_ADMIN_TOOLS</code>. Impact only if surfaced as callable schemas to non-admins.</div>
+<div class="k">Location</div><div><span class="loc">tool_execution.py (schema-selection path)</span></div>
+<div class="k">Potential impact</div><div>Non-admin could read an admin&#39;s served-model tmux/stderr output (infra logs: tracebacks, GPU errors — not end-user data). Low-severity info leak at most.</div>
+<div class="k">Why unresolved</div><div>Could not fully trace the schema-selection path to confirm whether these tools are actually exposed to non-admin sessions.</div>
+<div class="k">Root cause</div><div><span class="tag">incomplete-trace / authz-allowlist-gap?</span></div>
+</div>
+<pre>Neither tool appears in NON_ADMIN_BLOCKED_TOOLS nor _ADMIN_TOOLS.
+If surfaced to a non-admin schema set, dispatch-time admin gates do NOT block them.
+Next step: trace schema selection to confirm exposure; if exposed, classify Low info-leak.</pre>
+</div>
+<div class="card med">
+<h3>anyio cross-task cancel-scope on stdio_client teardown <span class="verdict uncertain">UNRESOLVED</span></h3>
+<div class="meta">
+<div class="k">Preconditions</div><div><code>disconnect_server</code>&#39;s <code>stack.aclose()</code> runs in a different task than the one that opened the stack (e.g. <code>_reconnect_builtin</code> from a tool-call task vs a lifespan-task disconnect).</div>
+<div class="k">Location</div><div><span class="loc">mcp_manager.py:380-404 (stdio_client teardown)</span></div>
+<div class="k">Potential impact</div><div>anyio may raise &quot;cancel scope in different task&quot; and potentially leak the spawned MCP subprocess.</div>
+<div class="k">Why unresolved</div><div>Requires runtime observation; static read inconclusive.</div>
+<div class="k">Root cause</div><div><span class="tag">async-task-lifecycle / resource-leak?</span></div>
+</div>
+<pre>Open in task A (tool-call / reconnect), aclose() in task B (lifespan disconnect)
+  -> anyio cancel-scope mismatch -> possible RuntimeError -> stdio subprocess leak.
+Static analysis cannot confirm task identity at teardown; needs runtime trace.</pre>
+</div>
+
+<h2>Assumptions made</h2>
+<table>
+<thead><tr><th>Assumption</th><th>Rationale</th></tr></thead>
+<tbody>
+<tr><td>The <code>mcp</code> python client honors <code>AsyncExitStack.aclose()</code> to terminate the spawned stdio subprocess.</td><td>If it leaks pipes/zombies internally, that is an upstream-library issue, not Odysseus code.</td></tr>
+<tr><td><code>session.call_tool()</code> on a hung/malicious MCP server can block indefinitely (no timeout in <code>_do_call</code>, <span class="loc">mcp_manager.py:476-502</span>).</td><td>Per THREAT_MODEL, MCP servers are admin-added/trusted; a hung call stalls only one cancellable agent turn — robustness, not security.</td></tr>
+<tr><td>Auto-reconnect-then-retry for builtin servers (<span class="loc">mcp_manager.py:454-469</span>) can re-run a non-idempotent builtin tool (e.g. <code>bash</code>) if the subprocess dies after a side effect.</td><td><code>bash</code>/<code>python</code> are admin-only and admin-intended — robustness nit, not a privilege/injection bug.</td></tr>
+<tr><td><code>build_chat_context</code> (<span class="loc">chat_processor.py</span>) produces the message list passed into the agent loop.</td><td>So the <code>UNTRUSTED_CONTEXT_POLICY</code> system preamble is present for native-path tool results.</td></tr>
+</tbody>
+</table>
+
+<h2>N/A scope areas</h2>
+<table>
+<thead><tr><th>Area</th><th>Reason</th></tr></thead>
+<tbody>
+<tr><td>SSRF / webhook guards</td><td>Out of this assignment&#39;s primary files (<code>webhook_manager.py</code> / <code>endpoint_resolver.py</code>) and not reached by the tool-parsing/MCP-lifecycle control flow examined.</td></tr>
+<tr><td>2FA / session-token crypto</td><td>Not part of tool parsing, dispatch, or MCP subprocess lifecycle.</td></tr>
+</tbody>
+</table>
+
+<footer>
+Methodology: static inspection of tool-call parsing, dispatch-time authorization, internal-tool loopback gating, and MCP subprocess lifecycle, cross-checked against an independent skeptic verdict per candidate. All candidate findings resolved to correct fail-closed controls or accepted designs; 0 dropped as false positives. Two items remain as unresolved coverage gaps pending runtime observation. Generated by an automated multi-agent audit.
+</footer>
+</div>
+</body>
+</html>

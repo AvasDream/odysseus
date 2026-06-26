@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Persistence, Transactions, Durability &amp; Migrations — Audit</title>
+<style>
+:root{--bg:#0f1117;--panel:#171a21;--panel2:#1d212b;--border:#2a2f3a;--text:#e6e8ee;--muted:#9aa3b2;--accent:#5b9dff;--crit:#ff4d5e;--high:#ff8a3d;--med:#ffcf4d;--low:#6ea8ff;--ok:#36d399}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 24px 90px}
+header.rep{border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:26px}
+h1{font-size:27px;margin:0 0 6px;font-weight:750;letter-spacing:-.3px}
+h2{font-size:19px;margin:38px 0 14px;border-left:3px solid var(--accent);padding-left:11px}
+h3{font-size:16px;margin:0 0 10px}
+.sub{color:var(--muted);font-size:14px;margin:0}
+.rollup{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:92px}
+.stat .n{font-size:25px;font-weight:750;line-height:1}
+.stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:5px}
+.badge{display:inline-block;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:999px;color:#0b0d12}
+.badge.crit{background:var(--crit)}.badge.high{background:var(--high)}.badge.med{background:var(--med)}.badge.low{background:var(--low)}.badge.ok{background:var(--ok)}
+.l-crit{color:var(--crit)}.l-high{color:var(--high)}.l-med{color:var(--med)}.l-low{color:var(--low)}.l-ok{color:var(--ok)}
+.card{background:var(--panel);border:1px solid var(--border);border-left-width:4px;border-radius:10px;padding:18px 20px;margin:14px 0}
+.card.crit{border-left-color:var(--crit)}.card.high{border-left-color:var(--high)}.card.med{border-left-color:var(--med)}.card.low{border-left-color:var(--low)}
+.card h3{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:12px 0;font-size:14px}
+.meta .k{color:var(--muted);white-space:nowrap}
+.loc{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--accent)}
+pre{background:#0b0d12;border:1px solid var(--border);border-radius:8px;padding:14px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;color:#cdd3df;white-space:pre-wrap;word-break:break-word}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+tr:hover td{background:var(--panel2)}
+.pattern{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin:12px 0}
+.tag{display:inline-block;font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:2px 7px;border-radius:6px}
+.verdict{font-size:11px;padding:2px 7px;border-radius:6px;border:1px solid var(--border)}
+.verdict.real{color:var(--ok);border-color:var(--ok)}.verdict.uncertain{color:var(--med);border-color:var(--med)}
+.muted{color:var(--muted)}.small{font-size:13px}
+footer{margin-top:54px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="rep">
+<h1>Persistence, Transactions, Durability &amp; Migrations — Audit</h1>
+<p class="sub">Two confirmed durability/correctness defects: a lost-update race when the memory audit writes back a stale snapshot across an LLM await, and a compaction timestamp ordering bug that reorders the conversation on DB reload. No security/priv-esc issues found.</p>
+<p class="sub"><a href="../index.html">&larr; back to dashboard</a></p>
+<div class="rollup">
+<div class="stat"><div class="n l-crit">0</div><div class="l">Critical</div></div>
+<div class="stat"><div class="n l-high">0</div><div class="l">High</div></div>
+<div class="stat"><div class="n l-med">2</div><div class="l">Medium</div></div>
+<div class="stat"><div class="n l-low">0</div><div class="l">Low</div></div>
+<div class="stat"><div class="n l-ok">0</div><div class="l">Dropped FP</div></div>
+</div>
+</header>
+
+<div class="card med">
+<h3><span>Memory audit silently drops memories added during its LLM window (lost update across await)</span><span><span class="badge med">Medium</span> <span class="verdict real">real</span></span></h3>
+<div class="meta">
+<span class="k">Confidence</span><span>Confirmed by trace. Preconditions: any authenticated non-admin with <code>can_manage_memory</code> triggers an audit that actually invokes the LLM (store changed since last tidy so the fingerprint short-circuit does not fire, &gt;=1 entry exists); during the 30-120s await the same owner completes a full read-modify-write adding a same-owner entry (POST /api/memory/add, a background extract_and_store save from another session, an import, or a second concurrent audit).</span>
+<span class="k">Location</span><span class="loc">services/memory/memory_extractor.py:508-639, :463; routes/memory_routes.py:119-121,272-306; src/memory.py:35-213</span>
+<span class="k">Invariant violated</span><span>Read-modify-write on the single shared memory.json store must not lose concurrent writes. audit_memories snapshots at line 508, runs a 30-120s LLM await (a real asyncio yield point), then rebuilds the saved set from that STALE snapshot plus a re-read that only rescues OTHER owners' rows and None-owner legacy rows, and overwrites the whole file at 639. No lock, no merge of same-owner rows created during the window.</span>
+<span class="k">Why it matters</span><span>Any memory created for the same owner during the audit's LLM call is silently and permanently clobbered: a background auto-extraction save (463), a manual POST /api/memory/add (121), an import, or a second concurrent audit. Own-data loss, no error surfaced.</span>
+<span class="k">Trigger</span><span>Any authenticated non-admin triggers POST /api/memory/audit on their own store (or an auto-extraction inline-audit fires); while that LLM call runs, the same owner adds a memory, sends a chat turn whose background extraction saves a fact, imports a backup, or a second audit overlaps. The per-session sequential extraction queue does NOT serialize across different sessions of the same owner nor across a manual audit + background extraction.</span>
+<span class="k">Fix direction</span><span>Serialize memory-store mutations with a per-owner asyncio.Lock held across load+modify+save, OR have audit_memories re-read the store after the LLM call and union in any same-owner rows whose id is not in the audited set before writing.</span>
+<span class="k">Root cause</span><span><span class="tag">race</span></span>
+</div>
+<pre>508: existing = memory_manager.load(owner=owner)   # pre-LLM snapshot
+542: await llm_call_async(..., timeout=120)         # real yield point, up to 120s
+589: final_entries derived from `originals` (stale line-508 snapshot)
+628: if owner:
+629:     all_entries = memory_manager.load_all()     # re-read
+631:     other_entries = [e for e in all_entries
+                          if e.get('owner') != owner and e.get('owner') is not None]
+633-635: legacy-rescue loop keeps only owner is None rows
+636: saved_entries = final_entries + other_entries   # same-owner rows added during window in NEITHER set
+639: memory_manager.save(saved_entries)              # overwrites whole file, dropping them
+
+MemoryManager (src/memory.py:35-213): load/load_all/save/add_entry are plain sync file I/O.
+save() uses os.replace for tear-free writes only — does NOT prevent a lost update across RMW.
+No asyncio.Lock / single-flight guard anywhere around audit_memories or extract_and_store.</pre>
+</div>
+
+<div class="card med">
+<h3><span>Manual compaction reorders the conversation on reload (summary sinks to the end)</span><span><span class="badge med">Medium</span> <span class="verdict real">real</span></span></h3>
+<div class="meta">
+<span class="k">Confidence</span><span>Confirmed by trace. Preconditions: an authenticated session owner calls POST /api/session/{id}/compact on a session with &gt;=6 messages and the LLM summary succeeds; the defect is latent until the session is re-hydrated from the DB (process restart, cache eviction, or any path through _load_session_from_db / _db_to_session). In-memory order is correct until then, masking it in single-process testing.</span>
+<span class="k">Location</span><span class="loc">routes/history_routes.py:584-642; core/session_manager.py:132-133,144-146; core/database.py:154</span>
+<span class="k">Invariant violated</span><span>The persisted (DB) message order must match the intended in-memory order so a reload reproduces the same conversation. compact builds history as [system_summary, summary_msg] + recent (597), but persists the two summary rows with timestamp=now (617-635) while kept recent rows retain their ORIGINAL earlier timestamps. DB reload orders strictly by timestamp (or by insertion/rowid order on the relationship path), placing later-stamped summaries last.</span>
+<span class="k">Why it matters</span><span>After re-hydration the compaction summary and its hidden [Conversation summary] system-context message appear AFTER the recent messages instead of before them, corrupting conversation order and the context the model sees; the visible 'Conversation compacted' note also jumps to the tail.</span>
+<span class="k">Trigger</span><span>Any authenticated session owner calls POST /api/session/{id}/compact on a session with &gt;=6 messages, then the session is reloaded from the DB (restart or cache eviction). No special privileges or untrusted content required.</span>
+<span class="k">Fix direction</span><span>Timestamp the inserted summary rows BEFORE the kept recent rows (e.g. now = min(recent timestamps) - delta), or re-stamp the kept recent rows to follow the summaries, so DB timestamp/insertion order matches the intended [summaries..., recent...] order.</span>
+<span class="k">Root cause</span><span><span class="tag">temporal</span></span>
+</div>
+<pre>597: new_history = [system_summary, summary_msg] + list(recent)   # summaries FIRST (correct intent)
+610: for m in db_msgs[:-keep_count]: db.delete(m)   # kept rows keep original (earlier) timestamps
+617: now = datetime.now(timezone.utc)
+618-625: db_sys_summary = DbChatMessage(..., timestamp=now)   # LATER than every kept row
+627-635: db_summary    = DbChatMessage(..., timestamp=now)
+
+Reload (_db_to_session) reproduces wrong order on BOTH paths:
+ (a) order_by(DbChatMessage.timestamp)  -&gt; earlier recent rows first, summaries last
+ (b) db_session.messages relationship (core/database.py:154, no order_by)
+     -&gt; SQLite returns rowid/insertion order; summaries inserted AFTER recent rows -&gt; last
+No re-sort after hydration: _db_to_session returns history as-built;
+Session.get_context_messages preserves order (only filters metadata.source=='slash').</pre>
+</div>
+
+<h2>Coverage</h2>
+
+<h3>Sub-areas inspected clean</h3>
+<table>
+<tr><th>Area</th><th>Finding</th></tr>
+<tr><td>core/atomic_io.py</td><td>atomic_write_json/atomic_write_text correctly write tmp+fsync+os.replace; PID-suffixed tmp avoids cross-process collision.</td></tr>
+<tr><td>core/database.py ALTER-TABLE migrations</td><td>Each guards with PRAGMA table_info before adding columns; CREATE INDEX IF NOT EXISTS used — idempotent, safe to re-run.</td></tr>
+<tr><td>core/database.py encrypt-legacy migrations</td><td>_migrate_encrypt_endpoint_keys/_signatures/_email_passwords use raw SQL to bypass EncryptedText and guard with is_encrypted() — no double-encryption, idempotent.</td></tr>
+<tr><td>src/caldav_sync.py _sync_blocking</td><td>Prune correctly gated (skips parse_failed, only within window, only origin=='caldav' with remote_href and no pending writeback, excludes seen_uids); per-calendar try/except with rollback; own to_thread SessionLocal.</td></tr>
+<tr><td>routes/prefs_routes.py _save_for_user</td><td>load+modify+save has no await between read and write, so concurrent async handlers serialize on the single-threaded loop — no last-write-wins clobber; multi-user _users slot preserved when auth disabled.</td></tr>
+<tr><td>core/session_manager.py mutations</td><td>truncate_messages/replace_messages/delete_session commit DB ops atomically within one transaction with matching in-memory updates; delete_session detaches documents to avoid orphan FK.</td></tr>
+<tr><td>services/memory/memory.py &amp; skills.py saves</td><td>Write tmp then os.replace; not invoked via to_thread so the fixed-name tmp does not cause cross-thread collision.</td></tr>
+</table>
+
+<h3>Coverage gaps</h3>
+<ul>
+<li>Did not exhaustively trace every one of the ~40 migrations in init_db() for column-default backfill correctness (e.g. _migrate_assign_legacy_owner, _migrate_backfill_document_owner_from_session); spot-checked the encrypt and add-column ones.</li>
+<li>Did not verify SQLite is run with WAL/busy_timeout; default rollback-journal mode plus check_same_thread=False can surface 'database is locked' under concurrent writers — degrades to an error rather than corruption and is largely threat-model-accepted.</li>
+<li>caldav writeback path (src/caldav_writeback.py) not fully traced for partial-failure rollback of sync_pending flags.</li>
+<li>Did not trace whether two concurrent sync_caldav(owner) calls (scheduled + manual) collide on the uid UNIQUE constraint beyond confirming the per-calendar except/rollback catches the IntegrityError (degrades to a failed sync, not corruption).</li>
+</ul>
+
+<h3>Assumptions made</h3>
+<ul>
+<li>asyncio event loop is single-threaded; a coroutine block with no await between a load and a save is atomic w.r.t. other coroutines (used for prefs clear and extract_and_store's own RMW).</li>
+<li>memory_vector.find_similar/add/rebuild and memory_manager.load/save are synchronous (no internal run_in_executor/to_thread); confirmed by absence of to_thread/run_in_executor in memory.py, memory_extractor.py, memory_routes.py.</li>
+<li>DB message reload always orders by DbChatMessage.timestamp (confirmed in _db_to_session and history get fallback), so persisted timestamp ordering determines reloaded conversation order.</li>
+<li>POSIX os.replace is atomic on the same filesystem.</li>
+</ul>
+
+<h3>N/A scope areas</h3>
+<ul>
+<li>Cross-process file locking / multi-replica concurrency: Odysseus is single-host single-process, so the only concurrency is asyncio tasks + a few to_thread workers — distributed-write concerns N/A.</li>
+<li>Admin-wipe raw open('w') on memory.json (admin_wipe_routes.py:48-49) writes an empty list; a crash mid-write yields an empty/truncated file which equals the intended wiped state — not a real durability defect, admin-only by design.</li>
+</ul>
+
+<h3>Candidates dropped as false positives</h3>
+<p class="muted">0</p>
+
+<footer>
+Methodology: each candidate finding was traced against current source and independently re-verified by a skeptic verdict; only findings with a "real" or "uncertain" verdict are retained, severities reflect the verifier's corrected ratings. Generated by an automated multi-agent audit.
+</footer>
+</div>
+</body>
+</html>

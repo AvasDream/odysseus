@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Caching, Invalidation, RAG &amp; Embeddings — Audit Report</title>
+<style>
+:root{--bg:#0f1117;--panel:#171a21;--panel2:#1d212b;--border:#2a2f3a;--text:#e6e8ee;--muted:#9aa3b2;--accent:#5b9dff;--crit:#ff4d5e;--high:#ff8a3d;--med:#ffcf4d;--low:#6ea8ff;--ok:#36d399}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 24px 90px}
+header.rep{border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:26px}
+h1{font-size:27px;margin:0 0 6px;font-weight:750;letter-spacing:-.3px}
+h2{font-size:19px;margin:38px 0 14px;border-left:3px solid var(--accent);padding-left:11px}
+h3{font-size:16px;margin:0 0 10px}
+.sub{color:var(--muted);font-size:14px;margin:0}
+.rollup{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:92px}
+.stat .n{font-size:25px;font-weight:750;line-height:1}
+.stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:5px}
+.badge{display:inline-block;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:999px;color:#0b0d12}
+.badge.crit{background:var(--crit)}.badge.high{background:var(--high)}.badge.med{background:var(--med)}.badge.low{background:var(--low)}.badge.ok{background:var(--ok)}
+.l-crit{color:var(--crit)}.l-high{color:var(--high)}.l-med{color:var(--med)}.l-low{color:var(--low)}.l-ok{color:var(--ok)}
+.card{background:var(--panel);border:1px solid var(--border);border-left-width:4px;border-radius:10px;padding:18px 20px;margin:14px 0}
+.card.crit{border-left-color:var(--crit)}.card.high{border-left-color:var(--high)}.card.med{border-left-color:var(--med)}.card.low{border-left-color:var(--low)}
+.card h3{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:12px 0;font-size:14px}
+.meta .k{color:var(--muted);white-space:nowrap}
+.loc{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--accent)}
+pre{background:#0b0d12;border:1px solid var(--border);border-radius:8px;padding:14px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;color:#cdd3df;white-space:pre-wrap;word-break:break-word}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+tr:hover td{background:var(--panel2)}
+.pattern{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin:12px 0}
+.tag{display:inline-block;font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:2px 7px;border-radius:6px}
+.verdict{font-size:11px;padding:2px 7px;border-radius:6px;border:1px solid var(--border)}
+.verdict.real{color:var(--ok);border-color:var(--ok)}.verdict.uncertain{color:var(--med);border-color:var(--med)}
+.muted{color:var(--muted)}.small{font-size:13px}
+footer{margin-top:54px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="rep">
+<h1>Caching, Invalidation, RAG &amp; Embeddings</h1>
+<p class="sub">No confirmed exploitable findings: the single candidate was verified down to a non-triggerable latent footgun and dropped.</p>
+<p class="small"><a href="../index.html">&larr; back to dashboard</a></p>
+<div class="rollup">
+<div class="stat"><span class="n l-crit">0</span><div class="l">Critical</div></div>
+<div class="stat"><span class="n l-high">0</span><div class="l">High</div></div>
+<div class="stat"><span class="n l-med">0</span><div class="l">Medium</div></div>
+<div class="stat"><span class="n l-low">0</span><div class="l">Low</div></div>
+<div class="stat"><span class="n l-ok">1</span><div class="l">Dropped FP</div></div>
+</div>
+</header>
+
+<h2>Findings</h2>
+<div class="pattern">
+<p>No real or uncertain findings remain after verification. The single candidate — <strong>RAGManager.search() silently drops the owner scope</strong> — was confirmed accurate at the code level but had <strong>no reachable exploit path</strong> in the current codebase, so it was dropped as a false positive. The owner-less wrapper's only consumer (<span class="loc">services/docs/service.py:52</span> DocsService.query) is not wired into any FastAPI route, while the live multi-user chat path passes <span class="tag">owner</span> explicitly against the VectorRAG singleton (<span class="loc">src/chat_processor.py:257</span>). See Coverage for the full rationale.</p>
+</div>
+
+<h2>Coverage</h2>
+
+<h3>Sub-areas inspected clean</h3>
+<table>
+<thead><tr><th>Area</th><th>Why it is clean</th></tr></thead>
+<tbody>
+<tr><td><span class="loc">src/memory_vector.py</span></td><td>Shared collection stores no owner metadata and <code>search()</code>/<code>find_similar()</code> are NOT owner-filtered, but every consumer cross-checks the unscoped vector hits against an owner-filtered JSON source of truth (chat_processor.py:106-110 intersects with <code>memory_manager.load(owner=owner)</code>; memory_provider.recall:188 drops hits whose <code>entry.owner != owner</code>; memory_extractor.py:418-429 only treats a <code>find_similar</code> match as a dup when <code>_match.owner == owner</code> or is None). No cross-tenant memory bleed.</td></tr>
+<tr><td><span class="loc">src/rag_vector.py</span> _generate_doc_id</td><td>Doc ids are owner-scoped (<code>owner\x00text</code>), so two owners indexing byte-identical chunks get distinct ids and the second add is not swallowed by the first's existing-id early-return; search/keyword-fallback both apply the owner filter when owner is provided; <code>delete_by_source</code>/<code>remove_directory</code>/<code>rename_owner</code> select by metadata and stay consistent across lanes.</td></tr>
+<tr><td><span class="loc">src/session_search.py</span></td><td><code>search_session_messages</code> defaults <code>restrict_owner=True</code>; <code>owner=None</code> maps to NULL-owner scope (not global) in both FTS and LIKE paths; <code>do_search_chats</code> (tool_implementations.py:75) is plumbed owner from tool_execution.py:778. No cross-user transcript leak.</td></tr>
+<tr><td><span class="loc">src/embedding_lanes.py</span> _get_or_reset_collection</td><td>Dimension/fingerprint/lane change triggers collection recreate + re-embed; a dimension-mismatched query against a legacy collection raises and is swallowed per-lane in <code>query_lanes</code> (degrades to no results, not corruption).</td></tr>
+<tr><td><span class="loc">services/search/content.py</span></td><td>SSRF + size-cap path: identity encoding forced, compressed responses refused, Content-Length hard-cap preflight, streamed cap; content cache key includes effective_cap so a truncated soft-cap fetch is not served to a larger-budget request; cached content is public web data (not user-private).</td></tr>
+<tr><td><span class="loc">services/search/core.py</span> searxng_search_results</td><td>Only successful (non-empty) results are cached — no negative caching of empty/error results; cache key includes count and time_filter.</td></tr>
+<tr><td><span class="loc">src/tool_index.py</span></td><td>Global tool-description index holds no user data; mcp tool ids (<code>mcp_&lt;name&gt;</code>) can collide across servers but only affects retrieval-candidate naming, dispatch resolves the real tool elsewhere.</td></tr>
+</tbody>
+</table>
+
+<h3>Coverage gaps</h3>
+<ul>
+<li>Did not exercise ChromaDB at runtime; relied on documented contract that <code>collection.query</code> raises (rather than silently returns mismatched-dim vectors) when the query embedding dimension differs from the collection's fixed dimension.</li>
+<li>Did not enumerate every route to fully prove <code>DocsService</code> is unreferenced by any router at runtime; grep found only tests and the services facade importing it, but a dynamic/plugin loader was not ruled out.</li>
+<li><code>EmbeddingClient.encode</code> ordering correctness depends on the remote embeddings server returning a per-item <code>index</code> field; behavior for servers that omit index and return out-of-order embeddings was not tested.</li>
+</ul>
+
+<h3>Assumptions made</h3>
+<ul>
+<li>chromadb <code>collection.add</code>/<code>upsert</code> require <code>len(embeddings) == len(ids)</code> and raise on mismatch, so a short/partial embedding response from <code>EmbeddingClient.encode</code> fails the add (caught/logged) rather than silently misaligning vectors.</li>
+<li>In production the app-level <code>rag_manager</code> is always the <code>VectorRAG</code> instance from <code>get_rag_manager()</code> (app.py:512), never the <code>RAGManager</code> wrapper, so chat_processor's owner-scoped RAG search is correct today.</li>
+<li>asyncio handlers run single-threaded; the only multi-thread mutation of the shared <code>content_cache_index</code> is via comprehensive_web_search's ThreadPoolExecutor, and any "dict changed size during iteration" in <code>cleanup_cache</code> is caught by <code>_cache_result</code>'s try/except (degrades to a skipped cache write, not a crash).</li>
+</ul>
+
+<h3>N/A scope areas</h3>
+<ul>
+<li>No Redis/memcached or distributed cache in scope — all caches here are in-process dicts + local <code>.cache</code> files on a single host, so cross-node cache key collision and distributed stampede are N/A.</li>
+<li>Cache stampede on miss: search/content caches are best-effort file caches with no locking, but the threat model is a trusted single-host admin workspace with low concurrency; duplicate upstream fetches on concurrent misses are an efficiency concern, not a security or correctness defect.</li>
+</ul>
+
+<h3>Candidates dropped as false positives: 1</h3>
+<div class="card low">
+<h3><span>RAGManager.search() silently drops the owner scope</span><span><span class="badge low">Low (proposed)</span><span class="verdict uncertain">DROPPED — FALSE POSITIVE</span></span></h3>
+<div class="meta">
+<div class="k">Root cause</div><div><span class="tag">idor</span></div>
+<div class="k">Location</div><div><span class="loc">src/rag_manager.py:35-37; src/rag_vector.py:343,352; services/docs/service.py:52; src/chat_processor.py:257</span></div>
+<div class="k">Code facts</div><div>Confirmed. <code>RAGManager.search</code> has no owner parameter and calls <code>self.vector_rag.search(query, k)</code>; with owner unset, <code>where_filter = {"owner": owner} if owner else None</code> &rarr; None &rarr; no owner filter, all owners' chunks returned.</div>
+<div class="k">Why dropped</div><div>No reachable exploit path. The only consumer of the owner-less wrapper search, <code>DocsService.query</code>, is NOT wired into any FastAPI route (grep finds only tests + the services facade re-exports). The live multi-user chat path passes <code>owner</code> explicitly (chat_processor.py:257) against the <code>VectorRAG</code> singleton, and both production <code>PersonalDocsManager</code> instantiations inject the <code>VectorRAG</code> singleton, never the wrapper. Latent footgun only; dropped per triggerable-vs-theoretical discipline.</div>
+</div>
+<pre>rag_manager.py:35  def search(self, query: str, k: int = 5)
+            return self.vector_rag.search(query, k)   # owner never passed
+rag_vector.py:352  where_filter = {"owner": owner} if owner else None   # owner=None =&gt; no filter
+docs/service.py:52 results = self.rag.search(query, k=top_k)   # no owner anywhere in DocsService
+
+Reachability: DocsService unreferenced by any router; chat path scoped via
+chat_processor.py:257  rag_manager.search(message, k=5, owner=owner)  # VectorRAG singleton</pre>
+</div>
+
+<footer>
+Methodology: static trace-based review of in-process caches, ChromaDB-backed RAG/vector stores, and embedding lanes, focused on stale/divergent caches, key-scoping (cross-user bleed), unbounded growth, negative caching, and embedding dimension/model mismatch. Each candidate carried an independent skeptic verdict; false positives were dropped per triggerable-vs-theoretical discipline. Generated by an automated multi-agent audit.
+</footer>
+</div>
+</body>
+</html>

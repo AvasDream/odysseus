@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Numeric &amp; Temporal Correctness, Scheduling — Audit Report</title>
+<style>
+:root{--bg:#0f1117;--panel:#171a21;--panel2:#1d212b;--border:#2a2f3a;--text:#e6e8ee;--muted:#9aa3b2;--accent:#5b9dff;--crit:#ff4d5e;--high:#ff8a3d;--med:#ffcf4d;--low:#6ea8ff;--ok:#36d399}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 24px 90px}
+header.rep{border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:26px}
+h1{font-size:27px;margin:0 0 6px;font-weight:750;letter-spacing:-.3px}
+h2{font-size:19px;margin:38px 0 14px;border-left:3px solid var(--accent);padding-left:11px}
+h3{font-size:16px;margin:0 0 10px}
+.sub{color:var(--muted);font-size:14px;margin:0}
+.rollup{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:92px}
+.stat .n{font-size:25px;font-weight:750;line-height:1}
+.stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:5px}
+.badge{display:inline-block;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:999px;color:#0b0d12}
+.badge.crit{background:var(--crit)}.badge.high{background:var(--high)}.badge.med{background:var(--med)}.badge.low{background:var(--low)}.badge.ok{background:var(--ok)}
+.l-crit{color:var(--crit)}.l-high{color:var(--high)}.l-med{color:var(--med)}.l-low{color:var(--low)}.l-ok{color:var(--ok)}
+.card{background:var(--panel);border:1px solid var(--border);border-left-width:4px;border-radius:10px;padding:18px 20px;margin:14px 0}
+.card.crit{border-left-color:var(--crit)}.card.high{border-left-color:var(--high)}.card.med{border-left-color:var(--med)}.card.low{border-left-color:var(--low)}
+.card h3{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:12px 0;font-size:14px}
+.meta .k{color:var(--muted);white-space:nowrap}
+.loc{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--accent)}
+pre{background:#0b0d12;border:1px solid var(--border);border-radius:8px;padding:14px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;color:#cdd3df;white-space:pre-wrap;word-break:break-word}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+tr:hover td{background:var(--panel2)}
+.pattern{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin:12px 0}
+.tag{display:inline-block;font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:2px 7px;border-radius:6px}
+.verdict{font-size:11px;padding:2px 7px;border-radius:6px;border:1px solid var(--border)}
+.verdict.real{color:var(--ok);border-color:var(--ok)}.verdict.uncertain{color:var(--med);border-color:var(--med)}
+.muted{color:var(--muted)}.small{font-size:13px}
+footer{margin-top:54px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="rep">
+<h1>Numeric &amp; Temporal Correctness, Scheduling</h1>
+<p class="sub">One owner-scoped check-in digest window is built in naive local wall-clock but compared against naive-UTC calendar rows, shifting buckets by the zone's UTC offset; the rest of the scheduling, RRULE, cron, monotonic-timeout and byte/GB-conversion paths inspected clean.</p>
+<p class="small"><a href="../index.html">&larr; back to dashboard</a></p>
+<div class="rollup">
+<div class="stat"><div class="n l-crit">0</div><div class="l">Critical</div></div>
+<div class="stat"><div class="n l-high">0</div><div class="l">High</div></div>
+<div class="stat"><div class="n l-med">0</div><div class="l">Medium</div></div>
+<div class="stat"><div class="n l-low">1</div><div class="l">Low</div></div>
+<div class="stat"><div class="n l-ok">0</div><div class="l">Dropped FP</div></div>
+</div>
+</header>
+
+<h2>Findings</h2>
+
+<div class="card low">
+<h3>
+<span>Assistant check-in calendar window strips timezone instead of converting to UTC, misaligning the query window by the local UTC offset</span>
+<span><span class="badge low">Low</span> <span class="verdict uncertain">Uncertain</span></span>
+</h3>
+<div class="meta">
+<div class="k">Confidence</div><div>Confirmed by trace (verifier verdict: uncertain — verifier agent unavailable, treated as uncertain). Preconditions: a non-admin or admin owner sets a non-UTC timezone on their default-assistant CrewMember and runs a "...check-in" scheduled LLM task (is_checkin path); fires every time that task executes; triggerable by the task owner only.</div>
+<div class="k">Location</div><div><span class="loc">src/task_scheduler.py:1205-1227</span> (window build + strip); <span class="loc">src/task_scheduler.py:255-289</span> (_digest_windows / _checkin_calendar_events); re-print at <span class="loc">src/task_scheduler.py:1242</span></div>
+<div class="k">Invariant violated</div><div>When comparing datetimes against DB rows, both sides must share a reference frame. CalendarEvent.dtstart for tz-carrying events is stored as naive UTC (caldav_sync._to_utc_naive / calendar_routes._parse_dt_pair convert tz-aware &rarr; UTC then strip tzinfo). The window boundaries are built from <code>now</code>, which when a task timezone is set is tz-aware LOCAL time (line 1205). Stripping tzinfo with <code>.replace(tzinfo=None)</code> yields naive LOCAL wall-clock, NOT naive UTC, so the window is offset from the stored UTC instants by the zone's UTC offset.</div>
+<div class="k">Why it matters</div><div>For any owner whose CrewMember.timezone is non-UTC, the "today/tomorrow", "this week" and "next_30_days" check-in buckets shift up to +/-14h relative to stored UTC event times. Events near a bucket boundary are silently dropped or pulled into the wrong bucket; for zones behind UTC (the Americas) the early part of "today" is missed and late events of the prior day leak in. The re-printed event times (line 1242 strftime) are also raw UTC, compounding the misrepresentation. No cross-tenant leak — query is owner-scoped — so a correctness/UX defect, not a privilege/data-exposure bug.</div>
+<div class="k">Trigger</div><div>A non-admin or admin owner sets a non-UTC timezone on their default-assistant CrewMember and runs a "...check-in" scheduled LLM task (is_checkin path). Fires every time that task executes. Triggerable by the task owner only.</div>
+<div class="k">Fix direction</div><div>Convert the window bounds to UTC before stripping: <code>_s = start.astimezone(timezone.utc).replace(tzinfo=None) if start.tzinfo else start</code> (and same for <code>_e</code>), instead of dropping the offset. Equivalently, build _digest_windows from a naive-UTC <code>now</code> for the DB query while keeping the tz-aware <code>now</code> only for the human-readable time_str.</div>
+<div class="k">Root cause</div><div><span class="tag">temporal</span></div>
+</div>
+<pre>now = _utcnow().replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz_name))  # tz-aware LOCAL
+...
+for label, start, end in _digest_windows(now):
+    _s = start.replace(tzinfo=None) if start.tzinfo else start   # strips offset -&gt; naive LOCAL, not UTC
+    _e = end.replace(tzinfo=None) if end.tzinfo else end
+    evs = _checkin_calendar_events(_db, task.owner, _s, _e)  # compares against naive-UTC dtstart</pre>
+</div>
+
+<h2>Coverage</h2>
+
+<h3>Sub-areas inspected clean</h3>
+<table>
+<tr><th>Area</th><th>Result</th></tr>
+<tr><td>compute_next_run</td><td>HH:MM parse fails closed on malformed input (out-of-range/non-numeric &rarr; None); daily/weekly/monthly candidate math advances forward; monthly short-month clamps to last day; cron path delegates to croniter and converts tz-aware &rarr; naive UTC consistently; "once" returns None after scheduled_date passes so completed tasks do not re-fire.</td></tr>
+<tr><td>Missed-while-down handling</td><td>start() marks zombie running/queued runs aborted and pushes overdue next_run forward 60s, then post-run compute_next_run recomputes forward from now — no catch-up storm / no repeated same-tick dispatch.</td></tr>
+<tr><td>_shared_cache / singleflight</td><td>TTL uses time.monotonic() (correct monotonic-for-timeout usage); future set/clear paths release the pending entry on both success and exception.</td></tr>
+<tr><td>_loop sleep computation</td><td>Clamps delta to max(1.0, min(60.0, delta)) so a past/negative next_run yields 1s, not a negative or zero sleep.</td></tr>
+<tr><td>RRULE expansion (_expand_rrule)</td><td>naive/naive comparisons consistent; UNTIL=...Z stripped when DTSTART is naive to avoid dateutil tz-mix crash; _RRULE_EXPANSION_LIMIT=1000 caps unbounded expansion; overlap filter uses correct half-open [start,end); malformed RRULE falls back to a single overlap-checked event.</td></tr>
+<tr><td>fit.py scoring</td><td>_fit_score guards available&lt;=0 and required&gt;available; _speed_score/_context_score targets never zero; estimate_memory_gb and params_b guard pb&lt;=0 / malformed counts; gpu_count coerced via <code>or 1</code> before division.</td></tr>
+<tr><td>hardware.py</td><td>All byte&rarr;GB conversions guard non-numeric (isdigit/try-except) and zero (total_gb&lt;=0 &rarr; None); vram parsing tolerates [N/A] unified-memory devices; cache TTL uses time.time() for a 24h wall-clock cache (acceptable, not a timeout).</td></tr>
+<tr><td>caldav_sync</td><td>_to_utc_naive converts tz-aware &rarr; UTC before stripping; all-day widened to midnight datetime; prune gated on a clean parse so partial reads never delete upstream-present events; SSRF host validation + redirect pinning intact.</td></tr>
+<tr><td>email_thread_parser</td><td>200KB input cap and [:1500] meta truncation bound all regex work; attribution/header regexes use MULTILINE without nested unbounded quantifiers, so no catastrophic-backtracking ReDoS on untrusted email bodies.</td></tr>
+</table>
+
+<h3>Coverage gaps</h3>
+<table>
+<tr><th>Gap</th></tr>
+<tr><td>DST transition correctness in compute_next_run's tz path was not exhaustively traced: now.replace(hour=h,minute=m) keeps the pre-resolved offset and may drift ~1h across spring-forward/fall-back boundaries, but this is at most a twice-yearly 1h schedule drift and likely accepted; not reported.</td></tr>
+<tr><td>scheduled_day is not range-validated at the create route (task_routes.py); weekly with scheduled_day&gt;6 schedules an off-weekday run and monthly with 0/&gt;31 clamps to month-end — confirmed owner-only schedule mis-timing with no privilege/security impact, so noted but not reported.</td></tr>
+<tr><td>The caldav lib's internal handling of naive datetimes passed to date_search (start/end) was not traced into the library; assumed the lib treats them as UTC consistent with the stored naive-UTC rows.</td></tr>
+</table>
+
+<h3>Assumptions made</h3>
+<table>
+<tr><th>Assumption</th></tr>
+<tr><td>CalendarEvent.dtstart for tz-carrying (is_utc=True) events is stored as naive UTC — confirmed in caldav_sync._to_utc_naive and calendar_routes._parse_dt_pair; UI events created without explicit offset are naive-local (is_utc=False), making the DB a mix, which the check-in query treats uniformly.</td></tr>
+<tr><td>croniter and dateutil.rrule behave per their documented contracts.</td></tr>
+<tr><td>task_scheduler runs single-threaded on the asyncio loop except for asyncio.to_thread CalDAV sync; DB sessions are per-call SessionLocal() so cross-coroutine shared mutable state is limited to _executing (lock-guarded) and _shared_cache (lock-guarded).</td></tr>
+</table>
+
+<h3>N/A scope areas</h3>
+<table>
+<tr><th>Area</th><th>Reason</th></tr>
+<tr><td>hwfit fit.py / hardware.py numerics</td><td>Admin/UI-facing read-only scoring over a trusted local catalog; miscalculated tok/s or fit scores carry no security impact — out of security scope.</td></tr>
+<tr><td>Float == comparison on money</td><td>No monetary/currency arithmetic exists in the assigned files, so the float-equality-on-money class is N/A here.</td></tr>
+<tr><td>Integer overflow</td><td>Python ints are arbitrary precision; no fixed-width integer sinks were reached on the traced paths, so true integer overflow is N/A.</td></tr>
+</table>
+
+<div class="pattern">
+<strong>Candidates dropped as false positives:</strong> 0
+</div>
+
+<footer>
+Methodology: single-area static trace of numeric and temporal correctness and scheduling paths, with an independent skeptic verdict attached per candidate. The one kept finding carries an <em>uncertain</em> verdict because the independent verifier agent was unavailable; the auditor trace is internally consistent but unconfirmed by a second pass. Generated by an automated multi-agent audit.
+</footer>
+</div>
+</body>
+</html>
