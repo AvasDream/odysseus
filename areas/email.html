@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Email Subsystem — Odysseus Audit</title>
+<style>
+:root{--bg:#0f1117;--panel:#171a21;--panel2:#1d212b;--border:#2a2f3a;--text:#e6e8ee;--muted:#9aa3b2;--accent:#5b9dff;--crit:#ff4d5e;--high:#ff8a3d;--med:#ffcf4d;--low:#6ea8ff;--ok:#36d399}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 24px 90px}
+header.rep{border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:26px}
+h1{font-size:27px;margin:0 0 6px;font-weight:750;letter-spacing:-.3px}
+h2{font-size:19px;margin:38px 0 14px;border-left:3px solid var(--accent);padding-left:11px}
+h3{font-size:16px;margin:0 0 10px}
+.sub{color:var(--muted);font-size:14px;margin:0}
+.rollup{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:92px}
+.stat .n{font-size:25px;font-weight:750;line-height:1}
+.stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:5px}
+.badge{display:inline-block;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:999px;color:#0b0d12}
+.badge.crit{background:var(--crit)}.badge.high{background:var(--high)}.badge.med{background:var(--med)}.badge.low{background:var(--low)}.badge.ok{background:var(--ok)}
+.l-crit{color:var(--crit)}.l-high{color:var(--high)}.l-med{color:var(--med)}.l-low{color:var(--low)}.l-ok{color:var(--ok)}
+.card{background:var(--panel);border:1px solid var(--border);border-left-width:4px;border-radius:10px;padding:18px 20px;margin:14px 0}
+.card.crit{border-left-color:var(--crit)}.card.high{border-left-color:var(--high)}.card.med{border-left-color:var(--med)}.card.low{border-left-color:var(--low)}
+.card h3{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:12px 0;font-size:14px}
+.meta .k{color:var(--muted);white-space:nowrap}
+.loc{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--accent)}
+pre{background:#0b0d12;border:1px solid var(--border);border-radius:8px;padding:14px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;color:#cdd3df;white-space:pre-wrap;word-break:break-word}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+tr:hover td{background:var(--panel2)}
+.pattern{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin:12px 0}
+.tag{display:inline-block;font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:2px 7px;border-radius:6px}
+.verdict{font-size:11px;padding:2px 7px;border-radius:6px;border:1px solid var(--border)}
+.verdict.real{color:var(--ok);border-color:var(--ok)}.verdict.uncertain{color:var(--med);border-color:var(--med)}
+.muted{color:var(--muted)}.small{font-size:13px}
+footer{margin-top:54px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="rep">
+<h1>Email Subsystem: IMAP/SMTP, Parsing &amp; Pollers</h1>
+<p class="sub">Untrusted email content reaching sinks, IMAP/SMTP lifecycle, poller dedup/state, MIME parsing, attachment path handling, and cross-tenant IDOR on message/account IDs.</p>
+<p class="small"><a href="../index.html">&larr; back to dashboard</a></p>
+<div class="rollup">
+<div class="stat"><span class="n l-crit">0</span><div class="l">Critical</div></div>
+<div class="stat"><span class="n l-high">0</span><div class="l">High</div></div>
+<div class="stat"><span class="n l-med">1</span><div class="l">Medium</div></div>
+<div class="stat"><span class="n l-low">0</span><div class="l">Low</div></div>
+<div class="stat"><span class="n l-ok">1</span><div class="l">Dropped FP</div></div>
+</div>
+</header>
+
+<h2>Findings</h2>
+
+<div class="card med">
+<h3><span>Scheduled email is delivered before the row is claimed/marked sent — crash or dual-driver causes duplicate send</span><span><span class="badge med">Medium</span> <span class="verdict real">real</span></span></h3>
+<div class="meta">
+<div class="k">Severity</div><div>Medium — at-most-once delivery invariant violated by normal operational events; impact bounded to duplicate delivery of an email the owner already intended to send.</div>
+<div class="k">Confidence</div><div>Confirmed by trace. Preconditions: a scheduled email in <span class="loc">scheduled_emails</span> with <span class="loc">status='pending'</span> and <span class="loc">send_at &lt;= now</span>. Then EITHER (A) the server is killed/restarted during the SMTP round-trip — after <span class="loc">_send_smtp_message</span> returns (1057) but before the UPDATE at 1070 commits — under default config (<span class="loc">ODYSSEUS_INPROCESS_POLLERS</span> on); next tick re-delivers. OR (B) operator runs both the in-process poller and a cron <span class="loc">odysseus-mail poll-scheduled</span> and both passes overlap. No attacker required.</div>
+<div class="k">Location</div><div><span class="loc">routes/email_pollers.py:1010-1085</span> (_scheduled_poll_once); driver <span class="loc">1088-1101</span></div>
+<div class="k">Invariant violated</div><div>A queued scheduled email must be delivered at-most-once: the row must be atomically claimed (status flipped out of 'pending') BEFORE the irreversible SMTP send, so re-entry can never re-deliver it. Here the claim (UPDATE status='sent', 1070) happens AFTER the send succeeds (1057), and the initial SELECT (1010-1014) does not claim the rows.</div>
+<div class="k">Why it matters</div><div>The same email is sent twice (or N times) to all To/Cc/Bcc recipients. (a) crash/restart in the window between SMTP delivery (1057) and the status UPDATE (1070) leaves the row still 'pending' and due, so it is re-selected and re-delivered; (b) two drivers both SELECT the same pending row and both deliver before either flips status. The docstring (1122-1123) acknowledges (b) but relies on an env flag instead of an atomic claim.</div>
+<div class="k">Trigger</div><div>No attacker needed; normal operational events (deploy, OOM, crash, SIGKILL) or operator misconfiguration. Affects any owner with scheduled/agent-approved sends. (A) needs no misconfiguration; (B) needs the dual-driver setup.</div>
+<div class="k">Fix direction</div><div>Atomically claim before sending: <span class="loc">UPDATE scheduled_emails SET status='sending' WHERE id=? AND status='pending'</span> and proceed only if rowcount==1; on success set 'sent', on failure set 'failed'/'pending' with bounded retry. Makes re-entry idempotent and closes both the crash window and the dual-driver race.</div>
+<div class="k">Root cause</div><div><span class="tag">double-completion</span></div>
+</div>
+<pre># routes/email_pollers.py
+rows = conn.execute(f"""SELECT id, ... FROM scheduled_emails
+        WHERE status = 'pending' AND send_at &lt;= ?""", (now_iso,)).fetchall()  # 1010-1014
+conn.close()                                                                   # 1015 (no lock/txn spans read-&gt;write)
+...
+_send_smtp_message(cfg, cfg["from_address"], recipients, outer.as_string())    # 1057 (irreversible)
+...
+conn2.execute("UPDATE scheduled_emails SET status='sent' WHERE id=?", (sid,))  # 1070 (claim only AFTER send)
+
+# scripts/odysseus-mail cmd_poll_scheduled (line 267) invokes the SAME _scheduled_poll_once()
+# in-process poller runs it via asyncio.to_thread (1098); both can select the same due row.</pre>
+</div>
+
+<h2>Coverage</h2>
+
+<div class="pattern">
+<h3>Sub-areas inspected clean</h3>
+<table>
+<tr><th>Area</th><th>Why clean</th></tr>
+<tr><td>SMTP header injection</td><td>subject/to/cc set as MIME headers (email_routes.py:2483-2493) but compat32 Generator raises <span class="loc">HeaderParseError</span> on embedded newlines at <span class="loc">as_string()</span>/<span class="loc">as_bytes()</span> (verified empirically); CRLF fails the send rather than injecting headers. <span class="loc">_decode_header</span> CRLF strings hit the same guard.</td></tr>
+<tr><td>IDOR on account_id</td><td><span class="loc">require_owner</span> resolves account_id and calls <span class="loc">_assert_owns_account</span> (email_helpers.py:307-316); all body/path routes call it explicitly. <span class="loc">_get_email_config</span> nullifies cross-owner rows (787-788).</td></tr>
+<tr><td>IMAP connection pool</td><td>keyed by (account_id, owner) (email_routes.py:575,606) — no cross-tenant reuse; failed AUTHENTICATE shuts the socket (952-962); <span class="loc">_imap</span> context manager releases on every path incl. exception (998-1011).</td></tr>
+<tr><td>Agent loopback privilege</td><td>email tools loopback via <span class="loc">_internal_headers</span> with X-Odysseus-Owner = trusted SESSION owner; app.py:338-343 only honors it for an existing user and the route still runs <span class="loc">_assert_owns_account</span>.</td></tr>
+<tr><td>Untrusted email -&gt; agent context</td><td>active-email body_preview wrapped via <span class="loc">untrusted_context_message</span> (agent_loop.py:1240); all tool results incl. read_email bodies wrapped (1696-1697). No system-role injection.</td></tr>
+<tr><td>Calendar extraction (poller)</td><td>ops run via <span class="loc">do_manage_calendar(owner=_acct_owner)</span>; queries owner-scoped (tool_implementations.py:921-925); EXISTING_EVENTS owner-scoped (email_pollers.py:510). Malicious email cannot touch another tenant's events.</td></tr>
+<tr><td>Attachment filename path handling</td><td><span class="loc">_extract_attachment_to_disk</span> sanitizes via regex (1315) stripping <span class="loc">/</span> and <span class="loc">\</span>; <span class="loc">attachment_extract_dir</span> flattens folder/uid and asserts containment (505-516); <span class="loc">attachment_as_doc</span> adds commonpath check (1648-1656). No traversal reachable.</td></tr>
+<tr><td>IMAP SEARCH injection</td><td>search rejects CRLF in q (1205) and escapes backslash/quote (1232-1233); <span class="loc">_q()</span> quotes mailbox names.</td></tr>
+<tr><td>Google OAuth</td><td>state HMAC-signed (account_id+owner+nonce); callback rechecks <span class="loc">row.owner == state owner</span> (3661-3663). CSRF/confused-deputy mitigated.</td></tr>
+<tr><td>HTML sanitization</td><td>outbound WYSIWYG HTML allowlist-sanitized server-side (<span class="loc">_sanitize_email_html</span>, 517); inbound HTML DOM-sanitized client-side via <span class="loc">_sanitizeHtml</span> (utils.js:158-219) before innerHTML.</td></tr>
+</table>
+</div>
+
+<div class="pattern">
+<h3>Coverage gaps</h3>
+<ul>
+<li><span class="loc">check_email_urgency</span> scheduled task (active urgency path; in-poller block at email_pollers.py:715-841 is dead because <span class="loc">auto_urgent=False</span>) not fully traced to its alert-send sink — subject/body construction and header-injection there not exhaustively verified.</li>
+<li>MCP email tool name-&gt;account_id resolution layer (<span class="loc">mcp__email__*</span>) inferred to flow through owner-scoped routes but the exact label-&gt;account_id resolver not located/read; still blocked at the route by <span class="loc">_assert_owns_account</span>.</li>
+<li><span class="loc">_send_smtp_message</span> partial-failure semantics (per-recipient rejections, RSET, multi-RCPT) at email_helpers.py:153 not deeply traced.</li>
+<li>Frontend innerHTML render of parse_thread turns/body_html routes through <span class="loc">_sanitizeHtml</span>, but that denylist sanitizer not exhaustively fuzzed against mutation XSS / namespace confusion.</li>
+</ul>
+</div>
+
+<div class="pattern">
+<h3>Assumptions made</h3>
+<ul>
+<li>stdlib email uses default compat32 policy here (no <span class="loc">policy=</span> override), so <span class="loc">as_string()</span>/<span class="loc">as_bytes()</span> raises <span class="loc">HeaderParseError</span> on header values with embedded newlines — verified empirically.</li>
+<li>imaplib rejects CRLF inside command arguments, so folder/uid/search CRLF cannot inject extra IMAP commands.</li>
+<li>Each multi-user deployment assigns every user a non-empty <span class="loc">owner</span>; <span class="loc">owner==''</span> denotes unconfigured single-user mode where cross-tenant concerns are vacuous.</li>
+<li>uuid4 tokens for compose uploads are unguessable.</li>
+<li><span class="loc">_load_or_create_key()</span> returns a stable per-deployment secret so HMAC-signed OAuth state cannot be forged.</li>
+</ul>
+</div>
+
+<div class="pattern">
+<h3>N/A scope areas</h3>
+<ul>
+<li>Webhook SSRF, MCP subprocess management, local model serving, vault, 2FA, shell exec — outside email subsystem scope.</li>
+<li>Inbound HTML stored-XSS as a server-side sink: HTML rendered only in-browser via client-side <span class="loc">_sanitizeHtml</span>; no server-side template emits raw email HTML — N/A.</li>
+<li>Cross-account connection reuse leaking creds: pool key includes account_id and owner — N/A.</li>
+</ul>
+</div>
+
+<div class="pattern">
+<h3>Candidates dropped as false positives: 1</h3>
+<p><strong>email_boundaries thread-cache not owner-scoped</strong> (Low, claimed) — DROPPED. Structural asymmetry is real (<span class="loc">email_boundaries</span> PK is <span class="loc">message_id</span> alone, no owner_clause on the read at email_routes.py:1407-1410, unlike its owner-scoped siblings), but the leak cannot fire: NO WRITER EXISTS. The sole former writer <span class="loc">mark_email_boundaries</span> is retired (src/task_scheduler.py:248-252), its handler is deleted, and retired tasks are purged. <span class="loc">turns_json</span> is always NULL and the read falls through to a fresh <span class="loc">parse_thread</span> on the user's own body. Latent hardening observation only; not a triggerable vulnerability.</p>
+</div>
+
+<footer>
+Methodology: per-area deep correctness &amp; security audit with independent skeptic verification of each candidate; only "real"/"uncertain" verdicts retained, "false_positive" candidates dropped but counted. Generated by an automated multi-agent audit.
+</footer>
+</div>
+</body>
+</html>

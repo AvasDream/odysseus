@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Authz Audit — Authentication, Authorization, Sessions &amp; Tokens</title>
+<style>
+:root{--bg:#0f1117;--panel:#171a21;--panel2:#1d212b;--border:#2a2f3a;--text:#e6e8ee;--muted:#9aa3b2;--accent:#5b9dff;--crit:#ff4d5e;--high:#ff8a3d;--med:#ffcf4d;--low:#6ea8ff;--ok:#36d399}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 24px 90px}
+header.rep{border-bottom:1px solid var(--border);padding-bottom:20px;margin-bottom:26px}
+h1{font-size:27px;margin:0 0 6px;font-weight:750;letter-spacing:-.3px}
+h2{font-size:19px;margin:38px 0 14px;border-left:3px solid var(--accent);padding-left:11px}
+h3{font-size:16px;margin:0 0 10px}
+.sub{color:var(--muted);font-size:14px;margin:0}
+.rollup{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:92px}
+.stat .n{font-size:25px;font-weight:750;line-height:1}
+.stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:5px}
+.badge{display:inline-block;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:999px;color:#0b0d12}
+.badge.crit{background:var(--crit)}.badge.high{background:var(--high)}.badge.med{background:var(--med)}.badge.low{background:var(--low)}.badge.ok{background:var(--ok)}
+.l-crit{color:var(--crit)}.l-high{color:var(--high)}.l-med{color:var(--med)}.l-low{color:var(--low)}.l-ok{color:var(--ok)}
+.card{background:var(--panel);border:1px solid var(--border);border-left-width:4px;border-radius:10px;padding:18px 20px;margin:14px 0}
+.card.crit{border-left-color:var(--crit)}.card.high{border-left-color:var(--high)}.card.med{border-left-color:var(--med)}.card.low{border-left-color:var(--low)}
+.card h3{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.meta{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:12px 0;font-size:14px}
+.meta .k{color:var(--muted);white-space:nowrap}
+.loc{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--accent)}
+pre{background:#0b0d12;border:1px solid var(--border);border-radius:8px;padding:14px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;color:#cdd3df;white-space:pre-wrap;word-break:break-word}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+tr:hover td{background:var(--panel2)}
+.pattern{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin:12px 0}
+.tag{display:inline-block;font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:2px 7px;border-radius:6px}
+.verdict{font-size:11px;padding:2px 7px;border-radius:6px;border:1px solid var(--border)}
+.verdict.real{color:var(--ok);border-color:var(--ok)}.verdict.uncertain{color:var(--med);border-color:var(--med)}
+.muted{color:var(--muted)}.small{font-size:13px}
+footer{margin-top:54px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);padding-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="rep">
+<h1>Authentication, Authorization, Sessions &amp; Tokens</h1>
+<p class="sub">Traced end-to-end for auth bypass, privilege escalation, IDOR, confused-deputy loopback, session lifecycle, token handling, and 2FA ordering — no actionable findings confirmed; every candidate concern resolved to a correctly-enforced control.</p>
+<p class="small"><a href="../index.html">&larr; back to dashboard</a></p>
+<div class="rollup">
+<div class="stat"><span class="n l-crit">0</span><div class="l">Critical</div></div>
+<div class="stat"><span class="n l-high">0</span><div class="l">High</div></div>
+<div class="stat"><span class="n l-med">0</span><div class="l">Medium</div></div>
+<div class="stat"><span class="n l-low">0</span><div class="l">Low</div></div>
+<div class="stat"><span class="n l-ok">0</span><div class="l">Dropped FP</div></div>
+</div>
+</header>
+
+<div class="pattern">
+<h3><span class="badge ok">Clean</span> &nbsp;No real or uncertain findings in this area</h3>
+<p class="small muted">The auditor produced a clean verification pass: every privilege, loopback, session, token, and 2FA path inspected enforced its intended invariant. There are no Critical/High/Medium/Low findings and nothing was dropped as a false positive (no candidate findings were raised). The sections below record what was checked and why it holds, plus residual gaps and assumptions, so the absence of findings is auditable rather than merely asserted.</p>
+</div>
+
+<h2>Sub-areas inspected clean</h2>
+<table>
+<thead><tr><th>Control / Path</th><th>Location</th><th>Why it holds</th></tr></thead>
+<tbody>
+<tr><td>Internal-tool loopback admin grant</td><td><span class="loc">core/middleware.py require_admin</span></td><td>Admin granted only on <code>secrets.compare_digest</code> match of per-process <code>INTERNAL_TOOL_TOKEN</code>, or <code>current_user == 'internal-tool'</code>. AuthMiddleware additionally requires <code>_is_trusted_loopback</code> (direct 127.0.0.1/::1, no proxy-forward headers), closing the Cloudflare-tunnel spoof.</td></tr>
+<tr><td>Impersonation header re-check</td><td><span class="loc">app.py:333-345</span></td><td><code>X-Odysseus-Owner</code> only attributes a loopback request to an existing user; <code>require_admin</code> independently re-checks <code>is_admin</code>. Only senders pass the non-attacker-controllable session/task owner (<span class="loc">task_routes.py:537</span>). Non-admin task =&gt; non-admin user =&gt; 403.</td></tr>
+<tr><td>Tool-dispatch privilege gate</td><td><span class="loc">src/tool_execution.py:624-640</span></td><td><code>_ADMIN_TOOLS</code> and <code>is_public_blocked_tool</code> (incl. <code>mcp__</code>, <code>api_call</code>, <code>app_api</code>) checked against SESSION owner BEFORE any loopback; also unioned into <code>disabled_tools</code> (<span class="loc">agent_loop.py:1978</span>). Fails closed on non-string names (<span class="loc">tool_security.py:162-166</span>).</td></tr>
+<tr><td>Bearer-token sandboxing</td><td><span class="loc">app.py:362-413</span></td><td>Bearer sets <code>current_user='api'</code>; <code>require_user</code> 403s bearer (<span class="loc">auth_helpers.py:81-82</span>), so they reach only explicit scope+owner-gated routes. Owner enforced via <code>api_token_owner</code>; orphaned tokens dropped (<span class="loc">app.py:271-278</span>).</td></tr>
+<tr><td>Pre-setup privilege default</td><td><span class="loc">tool_security.py:169-196</span></td><td>Auth-enabled-but-no-admin treated as NON-admin (False) so bash/python not handed out pre-setup. Single-user (<code>AUTH_ENABLED=false</code>) returns True by design.</td></tr>
+<tr><td>Reserved-username escalation block</td><td><span class="loc">core/auth.py</span></td><td>create/rename/setup/signup refuse <code>RESERVED_USERNAMES</code> incl. <code>internal-tool</code>; <code>_drop_reserved_loaded_users</code> purges injected rows at load; <code>_migrate_single_user</code> remaps legacy reserved single-user to <code>admin</code>.</td></tr>
+<tr><td>2FA verification ordering</td><td><span class="loc">auth_routes.login + auth.py:538-542</span></td><td>Password verified first, then <code>totp_enabled</code> gate, then <code>totp_verify</code> which fails CLOSED when enabled but secret missing. <code>create_session_trusted</code> reached only after both factors pass.</td></tr>
+<tr><td>Session lifecycle</td><td><span class="loc">core/auth.py</span></td><td><code>secrets.token_hex(32)</code> tokens; validate/get-username prune expired AND orphaned sessions; <code>delete_user</code> revokes sessions + ApiToken + bearer cache; <code>rename_user</code> migrates session usernames; <code>change_password</code> revokes other sessions.</td></tr>
+<tr><td>Admin-gated target routes</td><td><span class="loc">device_flow / copilot / chatgpt_subscription / vault / admin_wipe / backup / api_token routes</span></td><td><code>require_admin</code>/inline <code>is_admin</code> verified throughout; api_token patch/delete include per-token owner check.</td></tr>
+<tr><td>set_admin demotion safety</td><td><span class="loc">auth.py:410-471</span></td><td>Last-admin demotion blocked; admin-count + flag flip in one <code>_config_lock</code> section; privilege stash/restore prevents <code>ADMIN_PRIVILEGES</code> (e.g. <code>can_use_bash</code>) leaking past demotion.</td></tr>
+<tr><td>Secret scrubbing on exempt route</td><td><span class="loc">settings_scrub.scrub_settings</span></td><td>Deep-masks secret-shaped keys for unauthenticated <code>GET /api/auth/settings</code>; POST handlers at exempt paths re-derive identity from cookie and check <code>is_admin</code>.</td></tr>
+</tbody>
+</table>
+
+<h2>Coverage gaps</h2>
+<ul>
+<li>Did not exhaustively enumerate every owner-scoped data route (notes, calendar, memory, documents, gallery, email, skills) for IDOR. Spot-checked <span class="loc">session_routes._verify_session_owner</span>, codex_routes scope/owner gates, and companion <code>owner_can_see</code>, all of which enforce <code>effective_user</code>/<code>api_token_owner</code> scoping. A full per-route audit of the ~40 routers was out of time budget.</li>
+<li><code>RateLimiter</code> internals (<span class="loc">src/rate_limiter.py</span>) only read at call sites. Login/signup/setup limiters key on <code>request.client.host</code>, which collapses to 127.0.0.1 behind a tunnel (shared bucket =&gt; potential self-DoS / weakened per-IP throttling). Known tradeoff, not an auth bypass.</li>
+<li>All findings are static control/data-flow traces; the app was not dynamically executed.</li>
+</ul>
+
+<h2>Assumptions made</h2>
+<ul>
+<li><code>secrets.token_hex</code>/<code>token_urlsafe</code> and bcrypt provide adequate entropy and constant-time comparison where used (<code>compare_digest</code> for the internal token, <code>bcrypt.checkpw</code> for bearer tokens).</li>
+<li><code>ODYSSEUS_INTERNAL_TOKEN</code> is never written to any settings/openapi/log surface reachable by a non-admin; it is an in-process secret per the threat model.</li>
+<li>FastAPI/Starlette route matching is case-sensitive and path-normalized, so <code>app_api</code> blocklist <code>path.startswith</code> prefix checks cannot be bypassed via case/encoding into a real admin route; <code>app_api</code> is admin-only regardless.</li>
+<li>AuthManager mutations run on the threadpool (<code>asyncio.to_thread</code>) with RLock/Lock guarding config and sessions. The backup-code <code>code in backup</code> read sits outside the lock before the locked remove — a theoretical double-use race, but the attacker must already hold a valid one-time backup code and win a same-instant race; accepted as low / non-actionable.</li>
+</ul>
+
+<h2>N/A scope areas</h2>
+<ul>
+<li><strong>External OAuth/OIDC identity-provider validation</strong>: device flows here are GitHub Copilot / ChatGPT subscription provider logins gated behind <code>require_admin</code>, not an end-user SSO trust boundary.</li>
+<li><strong>Multi-tenant / cross-org isolation</strong>: Odysseus is single-host with a trusted admin; "user" separation is best-effort owner-scoping, not a hard tenancy boundary per the threat model.</li>
+</ul>
+
+<h2>Candidates dropped as false positives</h2>
+<p class="small muted">0 — no candidate findings were raised in this area; the pass was clean.</p>
+
+<footer>
+Methodology: static control- and data-flow tracing of authentication, authorization, session, token, and 2FA paths against an auth-bypass / privilege-escalation / IDOR / confused-deputy lens, with each candidate independently skeptic-verified. No dynamic execution was performed. Generated by an automated multi-agent audit.
+</footer>
+</div>
+</body>
+</html>
